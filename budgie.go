@@ -25,8 +25,8 @@ var style = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(lipgloss.Color("#FAFAFA")).
 	Background(lipgloss.Color("#7D56F4")).
-	PaddingLeft(4).
-	Width(22)
+	Width(30).
+	Align(lipgloss.Left)
 
 func main() {
 	fmt.Println("Hello, world")
@@ -73,53 +73,25 @@ const (
 )
 
 // ------------------------------------------------------------
-func createInsertingCSVScreenmodel(filename string) insertingCSVScreenModel {
+func createInsertingCSVScreenmodel(filename string, reader *csv.Reader) insertingCSVScreenModel {
 	return insertingCSVScreenModel{
 		filename: filename,
-		reader:   nil,
-	}
-}
-
-type csvReaderMsg *csv.Reader
-
-func createCsvReaderMsg(reader *csv.Reader) tea.Cmd {
-	return func() tea.Msg {
-		return csvReaderMsg(reader)
+		reader:   reader,
 	}
 }
 
 func (m insertingCSVScreenModel) Init() tea.Cmd {
-
-	fmt.Println("Trying to open filename ", m.filename)
-
-	data, err := readCSV(m.filename)
-	if err != nil {
-		fmt.Println("Error reading file! ", err)
-		return tea.Quit
-	}
-	reader, err := createCSVReader(data)
-	if err != nil {
-		fmt.Println("Error creating CSV reader: ", err)
-		return tea.Quit
-	}
-	return createCsvReaderMsg(reader)
+	return nil
 }
 
 func (m insertingCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
-	case csvReaderMsg:
-		fmt.Println("Updating insertingCSVScreenModel with file: ", m.filename)
-		m.reader = (*csv.Reader)(msg)
-
-	// Is it a key press?
 	case tea.KeyMsg:
 
-		// Cool, what was the actual key pressed?
 		switch msg.String() {
 
-		// These keys should exit the program.
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
 		}
@@ -148,13 +120,10 @@ func (m insertCSVScreenModel) Init() tea.Cmd {
 func (m insertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
-	// Is it a key press?
 	case tea.KeyMsg:
 
-		// Cool, what was the actual key pressed?
 		switch msg.String() {
 
-		// These keys should exit the program.
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
 
@@ -165,9 +134,18 @@ func (m insertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			m := createInsertingCSVScreenmodel(m.filename)
-			msg := m.Init()
-			return m.Update(msg)
+			data, err := readCSV(m.filename)
+			if err != nil {
+				fmt.Println("Error reading file! ", err)
+				return m, tea.Quit
+			}
+			reader, err := createCSVReader(data)
+			if err != nil {
+				fmt.Println("Error creating CSV reader: ", err)
+				return m, tea.Quit
+			}
+			m := createInsertingCSVScreenmodel(m.filename, reader)
+			return m, nil
 
 		default:
 			m.filename += msg.String()
@@ -181,7 +159,7 @@ func (m insertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m insertCSVScreenModel) View() string {
 
 	s := "Press Ctrl + C to go back to home screen\n\n Filename: "
-	s += m.filename
+	s += style.Render(m.filename)
 
 	return s
 }
@@ -255,6 +233,7 @@ func (m homeScreenModel) View() string {
 	// The header
 	s := "What would you like to do?\n\n"
 
+	content := ""
 	// Iterate over our choices
 	for i, choice := range m.choices {
 
@@ -265,8 +244,10 @@ func (m homeScreenModel) View() string {
 		}
 
 		// Render the row
-		s += style.Render(fmt.Sprintf("%s %s\n", cursor, choice))
+		content += fmt.Sprintf("%s %s\n", cursor, choice)
 	}
+
+	s += style.Render(content)
 
 	// The footer
 	s += "\nPress q to quit.\n"
