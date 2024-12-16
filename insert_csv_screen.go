@@ -79,7 +79,7 @@ func (m insertCSVScreenModel) enterCSV() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	expenses_inserted := insertCSVIntoMongo(reader)
-	insertingCsvScreenModel := createInsertingCSVScreenModel(m.filename, expenses_inserted)
+	insertingCsvScreenModel := createPostInsertCSVScreenModel(m.filename, expenses_inserted)
 	return insertingCsvScreenModel, nil
 }
 

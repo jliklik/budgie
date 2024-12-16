@@ -6,7 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type insertingCSVScreenModel struct {
+type postInsertCSVScreenModel struct {
 	filename string
 	expenses []Expense
 }
@@ -24,18 +24,18 @@ const (
 	total       = iota
 )
 
-func createInsertingCSVScreenModel(filename string, expenses []Expense) insertingCSVScreenModel {
-	return insertingCSVScreenModel{
+func createPostInsertCSVScreenModel(filename string, expenses []Expense) postInsertCSVScreenModel {
+	return postInsertCSVScreenModel{
 		filename: filename,
 		expenses: expenses,
 	}
 }
 
-func (m insertingCSVScreenModel) Init() tea.Cmd {
+func (m postInsertCSVScreenModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m insertingCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m postInsertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
@@ -51,7 +51,7 @@ func (m insertingCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m insertingCSVScreenModel) View() string {
+func (m postInsertCSVScreenModel) View() string {
 	s := ""
 	s += displayLegend(s)
 	s += displayExpenses(m.expenses)
