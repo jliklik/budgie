@@ -16,14 +16,6 @@ const DefaultWidth = 15
 const DescriptionWidth = 30
 const LegendWidth = 50
 
-const (
-	date        = iota
-	description = iota
-	debit       = iota
-	credit      = iota
-	total       = iota
-)
-
 func createPostInsertCSVScreenModel(filename string, expenses []Expense) postInsertCSVScreenModel {
 	return postInsertCSVScreenModel{
 		filename: filename,

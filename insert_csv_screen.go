@@ -38,6 +38,15 @@ func (m insertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 
+		case "up":
+			// do nothing
+		case "down":
+			// do nothing
+		case "left":
+			// do nothing
+		case "right":
+			// do nothing
+
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
 
@@ -120,7 +129,7 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 
 		for i, str := range record {
 			switch i {
-			case date:
+			case csv_date_col:
 				// parse date
 				layout := "01/02/2006"
 				parsedDate, err := time.Parse(layout, str)
@@ -129,19 +138,19 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 					entry.day = parsedDate.Day()
 					entry.year = parsedDate.Year()
 				}
-			case description:
+			case csv_description_col:
 				entry.description = str
-			case debit:
+			case csv_debit_col:
 				val, err := strconv.ParseFloat(str, 64)
 				if err == nil {
 					entry.debit = val
 				}
-			case credit:
+			case csv_credit_col:
 				val, err := strconv.ParseFloat(str, 64)
 				if err == nil {
 					entry.credit = val
 				}
-			case total:
+			case csv_total_col:
 				val, err := strconv.ParseFloat(str, 64)
 				if err == nil {
 					entry.credit = val
