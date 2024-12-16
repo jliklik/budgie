@@ -12,6 +12,8 @@ type homeScreenModel struct {
 	selected map[int]struct{} // which items are selected
 }
 
+const HomeScreenWidth = 30
+
 func createHomeScreenModel() homeScreenModel {
 	return homeScreenModel{
 		choices:  []string{"Insert csv data", "Delete csv data", "Insert entry", "Delete entry", "Find entry"},
@@ -78,7 +80,7 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m homeScreenModel) View() string {
 	// The header
-	s := "What would you like to do?\n\n"
+	s := textStyle.Width(HomeScreenWidth).Render("What would you like to do?") + "\n"
 
 	content := ""
 	// Iterate over our choices
@@ -88,16 +90,20 @@ func (m homeScreenModel) View() string {
 		cursor := " " // no cursor
 		if m.cursor == i {
 			cursor = ">" // cursor!
+			content += selectedStyle.Width(HomeScreenWidth).Render(fmt.Sprintf("%s %s", cursor, choice))
+		} else {
+			content += promptStyle.Width(HomeScreenWidth).Render(fmt.Sprintf("%s %s", cursor, choice))
 		}
 
-		// Render the row
-		content += fmt.Sprintf("%s %s\n", cursor, choice)
+		if i < len(m.choices)-1 {
+			content += "\n"
+		}
 	}
 
-	s += style.Render(content)
+	s += promptStyle.Width(HomeScreenWidth).Render(content)
 
 	// The footer
-	s += "\nPress q to quit.\n"
+	s += "\n" + textStyle.Width(HomeScreenWidth).Render("Press q to quit.") + "\n"
 
 	// Send the UI for rendering
 	return s

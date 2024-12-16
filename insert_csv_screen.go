@@ -10,6 +10,8 @@ type insertCSVScreenModel struct {
 	filename string
 }
 
+const InsertScreenWidth = 20
+
 func createInsertCSVScreenModel() insertCSVScreenModel {
 	return insertCSVScreenModel{
 		filename: "",
@@ -61,8 +63,9 @@ func (m insertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m insertCSVScreenModel) View() string {
 
-	s := "Press Ctrl + C to go back to home screen\n\n Filename: "
-	s += style.Render(m.filename)
+	s := selectedStyle.Width(InsertScreenWidth).Render("> Insert csv data") + "\n"
+	s += textStyle.Width(InsertScreenWidth).Render("Enter filename:")
+	s += selectedStyle.PaddingLeft(2).PaddingRight(2).Render(m.filename)
 
 	return s
 }

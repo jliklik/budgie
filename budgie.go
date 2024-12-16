@@ -21,15 +21,27 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var style = lipgloss.NewStyle().
+var textStyle = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(lipgloss.Color("#FAFAFA")).
-	Background(lipgloss.Color("#7D56F4")).
-	Width(30).
+	Background(lipgloss.Color("#1f4fd1")).
+	PaddingLeft(2).
+	Align(lipgloss.Left)
+
+var promptStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("#FAFAFA")).
+	Background(lipgloss.Color("#fcc319")).
+	Align(lipgloss.Left)
+
+var selectedStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("#FAFAFA")).
+	Background(lipgloss.Color("#32d147")).
 	Align(lipgloss.Left)
 
 func main() {
-	fmt.Println("Hello, world")
+	fmt.Println("[budgie]")
 	uri := "mongodb://127.0.0.1:27017" // running this on localhost
 
 	// context.TODO() creates an empty context
