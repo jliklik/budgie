@@ -25,7 +25,6 @@ var textStyle = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(lipgloss.Color("#FAFAFA")).
 	Background(lipgloss.Color("#1f4fd1")).
-	PaddingLeft(2).
 	Align(lipgloss.Left)
 
 var promptStyle = lipgloss.NewStyle().
@@ -85,27 +84,4 @@ func readCSV(filename string) ([]byte, error) {
 func createCSVReader(data []byte) (*csv.Reader, error) {
 	reader := csv.NewReader(bytes.NewReader(data))
 	return reader, nil
-}
-
-func processCSV(reader *csv.Reader) string {
-
-	s := ""
-
-	for {
-		record, err := reader.Read()
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				fmt.Println("Error reading CSV data: ", err)
-				break
-			}
-		}
-		for _, str := range record {
-			s += (str)
-		}
-		s += "\n"
-	}
-
-	return s
 }

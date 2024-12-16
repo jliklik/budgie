@@ -64,7 +64,7 @@ func (m insertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m insertCSVScreenModel) View() string {
 
 	s := selectedStyle.Width(InsertScreenWidth).Render("> Insert csv data") + "\n"
-	s += textStyle.Width(InsertScreenWidth).Render("Enter filename:")
+	s += textStyle.Width(InsertScreenWidth).PaddingLeft(2).Render("Enter filename:")
 	s += selectedStyle.PaddingLeft(2).PaddingRight(2).Render(m.filename)
 
 	return s

@@ -80,7 +80,7 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m homeScreenModel) View() string {
 	// The header
-	s := textStyle.Width(HomeScreenWidth).Render("What would you like to do?") + "\n"
+	s := textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("What would you like to do?") + "\n"
 
 	content := ""
 	// Iterate over our choices
@@ -103,7 +103,7 @@ func (m homeScreenModel) View() string {
 	s += promptStyle.Width(HomeScreenWidth).Render(content)
 
 	// The footer
-	s += "\n" + textStyle.Width(HomeScreenWidth).Render("Press q to quit.") + "\n"
+	s += "\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press q to quit.") + "\n"
 
 	// Send the UI for rendering
 	return s
