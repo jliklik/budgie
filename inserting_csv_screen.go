@@ -1,30 +1,33 @@
 package main
 
 import (
-	"encoding/csv"
-	"fmt"
-	"io"
+	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type insertingCSVScreenModel struct {
 	filename string
-	reader   *csv.Reader
+	expenses []Expense
 }
 
-// type Book struct {
-// 	Title  string
-// 	Author string
-// }
-
-const CsvEntryWidth = 15
+const DateWidth = 5
+const DefaultWidth = 15
 const DescriptionWidth = 30
+const LegendWidth = 50
 
-func createInsertingCSVScreenmodel(filename string, reader *csv.Reader) insertingCSVScreenModel {
+const (
+	date        = iota
+	description = iota
+	debit       = iota
+	credit      = iota
+	total       = iota
+)
+
+func createInsertingCSVScreenModel(filename string, expenses []Expense) insertingCSVScreenModel {
 	return insertingCSVScreenModel{
 		filename: filename,
-		reader:   reader,
+		expenses: expenses,
 	}
 }
 
@@ -49,44 +52,54 @@ func (m insertingCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m insertingCSVScreenModel) View() string {
-	s := "Press Ctrl + C to go back to home screen\n\n"
-	s += processCSV(m.reader)
+	s := ""
+	s += displayLegend(s)
+	s += displayExpenses(m.expenses)
+	s += "\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press Ctrl+C to go back.") + "\n"
 	return s
 }
 
-func processCSV(reader *csv.Reader) string {
+func displayLegend(s string) string {
+	s += textStyle.Width(LegendWidth).Render("Legend") + "\n"
+	s += errorStyle.Width(LegendWidth).Render("Not inserted into DB - invalid or duplicate") + "\n"
+	s += selectedStyle.Width(LegendWidth).Render("Successfully inserted into DB") + "\n\n"
+	return s
+}
+
+func displayExpenses(expenses []Expense) string {
 
 	s := ""
+	s += textStyle.Width(DateWidth).Render("Year")
+	s += " | "
+	s += textStyle.Width(DateWidth).Render("Month")
+	s += " | "
+	s += textStyle.Width(DateWidth).Render("Day")
+	s += " | "
+	s += textStyle.Width(DescriptionWidth).Render("Description")
+	s += " | "
+	s += textStyle.Width(DefaultWidth).Render("Debit")
+	s += " | "
+	s += textStyle.Width(DefaultWidth).Render("Credit")
+	s += "\n"
 
-	header := true
+	for _, entry := range expenses {
 
-	for {
-		record, err := reader.Read()
-		if err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				fmt.Println("Error reading CSV data: ", err)
-				break
-			}
+		style := selectedStyle
+		if !entry.valid {
+			style = errorStyle
 		}
 
-		line := ""
-		for i, str := range record {
-			width := CsvEntryWidth
-			if i == 1 {
-				width = DescriptionWidth
-			}
-			if header {
-				line += textStyle.Width(width).Render(str)
-			} else {
-				line += selectedStyle.Width(width).Render(str)
-			}
-
-			line += " | "
-		}
-		// s += csvLineStyle.Render(line) + "\n"
-		header = false
+		line := style.Width(DateWidth).Render(strconv.Itoa(entry.year))
+		line += " | "
+		line += style.Width(DateWidth).Render(strconv.Itoa(entry.month))
+		line += " | "
+		line += style.Width(DateWidth).Render(strconv.Itoa(entry.day))
+		line += " | "
+		line += style.Width(DescriptionWidth).Render(entry.description)
+		line += " | "
+		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.debit, 'f', 2, 64))
+		line += " | "
+		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.credit, 'f', 2, 64))
 		s += line + "\n"
 	}
 

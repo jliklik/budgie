@@ -1,22 +1,9 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"encoding/csv"
 	"fmt"
-	"io"
 	"os"
 
-	// "encoding/json"
-	// "log"
-
-	// MongoDB
-	// "go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-
-	// TUI
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -39,18 +26,17 @@ var selectedStyle = lipgloss.NewStyle().
 	Background(lipgloss.Color("#32d147")).
 	Align(lipgloss.Left)
 
+var errorStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("#FAFAFA")).
+	Background(lipgloss.Color("#f542c2")).
+	Align(lipgloss.Left)
+
+const MongoDb = "budgie"
+const MongoCollection = "expenses"
+const MongoUri = "mongodb://127.0.0.1:27017" // running this on localhost
+
 func main() {
-	fmt.Println("[budgie]")
-	uri := "mongodb://127.0.0.1:27017" // running this on localhost
-
-	// context.TODO() creates an empty context
-	// options.Client().ApplyURI() is part of mongo-driver/mongo/options package
-	_, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Connected to mongodb server")
 
 	p := tea.NewProgram(createHomeScreenModel())
 	if _, err := p.Run(); err != nil {
@@ -58,30 +44,4 @@ func main() {
 		os.Exit(1)
 	}
 
-}
-
-const (
-	insertCsvData = iota
-	deleteCsvData = iota
-	insertEntry   = iota
-	deleteEntry   = iota
-	findEntry     = iota
-)
-
-func readCSV(filename string) ([]byte, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-func createCSVReader(data []byte) (*csv.Reader, error) {
-	reader := csv.NewReader(bytes.NewReader(data))
-	return reader, nil
 }

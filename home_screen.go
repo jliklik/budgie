@@ -14,6 +14,14 @@ type homeScreenModel struct {
 
 const HomeScreenWidth = 30
 
+const (
+	insertCsvData = iota
+	deleteCsvData = iota
+	insertEntry   = iota
+	deleteEntry   = iota
+	findEntry     = iota
+)
+
 func createHomeScreenModel() homeScreenModel {
 	return homeScreenModel{
 		choices:  []string{"Insert csv data", "Delete csv data", "Insert entry", "Delete entry", "Find entry"},
@@ -103,7 +111,7 @@ func (m homeScreenModel) View() string {
 	s += promptStyle.Width(HomeScreenWidth).Render(content)
 
 	// The footer
-	s += "\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press q to quit.") + "\n"
+	s += "\n\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press q to quit.") + "\n"
 
 	// Send the UI for rendering
 	return s
