@@ -6,7 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type insertingCSVScreenModel struct {
+type postInsertCSVScreenModel struct {
 	filename string
 	expenses []Expense
 }
@@ -16,26 +16,18 @@ const DefaultWidth = 15
 const DescriptionWidth = 30
 const LegendWidth = 50
 
-const (
-	date        = iota
-	description = iota
-	debit       = iota
-	credit      = iota
-	total       = iota
-)
-
-func createInsertingCSVScreenModel(filename string, expenses []Expense) insertingCSVScreenModel {
-	return insertingCSVScreenModel{
+func createPostInsertCSVScreenModel(filename string, expenses []Expense) postInsertCSVScreenModel {
+	return postInsertCSVScreenModel{
 		filename: filename,
 		expenses: expenses,
 	}
 }
 
-func (m insertingCSVScreenModel) Init() tea.Cmd {
+func (m postInsertCSVScreenModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m insertingCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m postInsertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
@@ -51,7 +43,7 @@ func (m insertingCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m insertingCSVScreenModel) View() string {
+func (m postInsertCSVScreenModel) View() string {
 	s := ""
 	s += displayLegend(s)
 	s += displayExpenses(m.expenses)
@@ -85,21 +77,21 @@ func displayExpenses(expenses []Expense) string {
 	for _, entry := range expenses {
 
 		style := selectedStyle
-		if !entry.valid {
+		if !entry.Valid {
 			style = errorStyle
 		}
 
-		line := style.Width(DateWidth).Render(strconv.Itoa(entry.year))
+		line := style.Width(DateWidth).Render(strconv.Itoa(entry.Year))
 		line += " | "
-		line += style.Width(DateWidth).Render(strconv.Itoa(entry.month))
+		line += style.Width(DateWidth).Render(strconv.Itoa(entry.Month))
 		line += " | "
-		line += style.Width(DateWidth).Render(strconv.Itoa(entry.day))
+		line += style.Width(DateWidth).Render(strconv.Itoa(entry.Day))
 		line += " | "
-		line += style.Width(DescriptionWidth).Render(entry.description)
+		line += style.Width(DescriptionWidth).Render(entry.Description)
 		line += " | "
-		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.debit, 'f', 2, 64))
+		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Debit, 'f', 2, 64))
 		line += " | "
-		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.credit, 'f', 2, 64))
+		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
 		s += line + "\n"
 	}
 

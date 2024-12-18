@@ -69,6 +69,7 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case insertEntry:
 			case deleteEntry:
 			case findEntry:
+				return createFindEntryScreenModel(), nil
 			}
 
 			_, ok := m.selected[m.cursor]
@@ -76,7 +77,6 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				delete(m.selected, m.cursor)
 			} else {
 				m.selected[m.cursor] = struct{}{}
-				fmt.Println(m.selected)
 			}
 		}
 	}
@@ -100,7 +100,7 @@ func (m homeScreenModel) View() string {
 			cursor = ">" // cursor!
 			content += selectedStyle.Width(HomeScreenWidth).Render(fmt.Sprintf("%s %s", cursor, choice))
 		} else {
-			content += promptStyle.Width(HomeScreenWidth).Render(fmt.Sprintf("%s %s", cursor, choice))
+			content += inactiveStyle.Width(HomeScreenWidth).Render(fmt.Sprintf("%s %s", cursor, choice))
 		}
 
 		if i < len(m.choices)-1 {
@@ -108,7 +108,7 @@ func (m homeScreenModel) View() string {
 		}
 	}
 
-	s += promptStyle.Width(HomeScreenWidth).Render(content)
+	s += inactiveStyle.Width(HomeScreenWidth).Render(content)
 
 	// The footer
 	s += "\n\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press q to quit.") + "\n"
