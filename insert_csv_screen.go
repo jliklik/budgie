@@ -134,26 +134,26 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 				layout := "01/02/2006"
 				parsedDate, err := time.Parse(layout, str)
 				if err == nil {
-					entry.month = int(parsedDate.Month())
-					entry.day = parsedDate.Day()
-					entry.year = parsedDate.Year()
+					entry.Month = int(parsedDate.Month())
+					entry.Day = parsedDate.Day()
+					entry.Year = parsedDate.Year()
 				}
 			case csv_description_col:
-				entry.description = str
+				entry.Description = str
 			case csv_debit_col:
 				val, err := strconv.ParseFloat(str, 64)
 				if err == nil {
-					entry.debit = val
+					entry.Debit = val
 				}
 			case csv_credit_col:
 				val, err := strconv.ParseFloat(str, 64)
 				if err == nil {
-					entry.credit = val
+					entry.Credit = val
 				}
 			case csv_total_col:
 				val, err := strconv.ParseFloat(str, 64)
 				if err == nil {
-					entry.credit = val
+					entry.Total = val
 				}
 			}
 		}
@@ -166,13 +166,15 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 
 	// context.TODO() creates an empty context
 	// options.Client().ApplyURI() is part of mongo-driver/mongo/options package
-	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(MongoUri))
+	ctx := context.TODO()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
 	if err != nil {
 		panic(err)
 	}
 
 	defer func() {
-		if err = client.Disconnect(context.TODO()); err != nil {
+		if err = client.Disconnect(ctx); err != nil {
 			panic(err)
 		}
 	}()
@@ -180,8 +182,8 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 	coll := client.Database(MongoDb).Collection(MongoCollection)
 
 	for _, entry := range entries {
-		if entry.valid {
-			coll.InsertOne(context.TODO(), entry)
+		if entry.Valid {
+			coll.InsertOne(ctx, entry)
 		}
 	}
 
@@ -189,17 +191,17 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 }
 
 func check_if_entry_is_valid(entry *Expense) {
-	if entry.month == 0 {
+	if entry.Month == 0 {
 		return
-	} else if entry.day == 0 {
+	} else if entry.Day == 0 {
 		return
-	} else if entry.year == 0 {
+	} else if entry.Year == 0 {
 		return
-	} else if entry.description == "" {
+	} else if entry.Description == "" {
 		return
-	} else if entry.debit == 0 && entry.credit == 0 {
+	} else if entry.Debit == 0 && entry.Credit == 0 {
 		return
 	}
 
-	entry.valid = true
+	entry.Valid = true
 }

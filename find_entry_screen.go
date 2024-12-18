@@ -70,7 +70,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.fields[m.cursor] != "" {
 					year, err := strconv.Atoi(m.fields[m.cursor])
 					if err == nil {
-						m.entry_to_search.year = year
+						m.entry_to_search.Year = year
 						m.validated[m.cursor] = true
 						m.cursor++
 						m.feedback = "Press Ctrl+C to go back."
@@ -86,7 +86,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.fields[m.cursor] != "" {
 					month, err := time.Parse("Jan", m.fields[m.cursor])
 					if err == nil {
-						m.entry_to_search.month = int(month.Month())
+						m.entry_to_search.Month = int(month.Month())
 						m.validated[m.cursor] = true
 						m.cursor++
 						m.feedback = "Press Ctrl+C to go back."
@@ -102,7 +102,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.fields[m.cursor] != "" {
 					day, err := strconv.Atoi(m.fields[m.cursor])
 					if err == nil && day >= 1 && day <= 31 {
-						m.entry_to_search.day = day
+						m.entry_to_search.Day = day
 						m.validated[m.cursor] = true
 						m.cursor++
 						m.feedback = "Press Ctrl+C to go back."
@@ -115,7 +115,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.feedback = "Press Ctrl+C to go back."
 				}
 			case expense_description:
-				m.entry_to_search.description = m.fields[m.cursor]
+				m.entry_to_search.Description = m.fields[m.cursor]
 				m.validated[m.cursor] = true
 				m.cursor++
 				m.feedback = "Press Ctrl+C to go back."
@@ -123,7 +123,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.fields[m.cursor] != "" {
 					val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
 					if err == nil {
-						m.entry_to_search.debit = val
+						m.entry_to_search.Debit = val
 						m.validated[m.cursor] = true
 						m.cursor++
 						m.feedback = "Press Ctrl+C to go back."
@@ -139,7 +139,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.fields[m.cursor] != "" {
 					val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
 					if err == nil {
-						m.entry_to_search.debit = val
+						m.entry_to_search.Debit = val
 						m.validated[m.cursor] = true
 						m.feedback = "Press Ctrl+C to go back."
 					} else {
@@ -207,17 +207,17 @@ func findMatchingEntriesInMongo(entry Expense) {
 	// if entry.year != 0 {
 	// 	filters = append(filters, bson.D{{"year", entry.year}})
 	// }
-	// if entry.month != 0 {
-	// 	filters = append(filters, bson.D{{"month", entry.month}})
+	// if entry.Month != 0 {
+	// 	filters = append(filters, bson.D{{"month", entry.Month}})
 	// }
-	// if entry.day != 0 {
-	// 	filters = append(filters, bson.D{{"day", entry.day}})
+	// if entry.Day != 0 {
+	// 	filters = append(filters, bson.D{{"day", entry.Day}})
 	// }
-	// if entry.description != "" {
-	// 	filters = append(filters, bson.D{{"description", entry.description}})
+	// if entry.Description != "" {
+	// 	filters = append(filters, bson.D{{"description", entry.Description}})
 	// }
-	// if entry.debit != 0 {
-	// 	filters = append(filters, bson.D{{"debit", entry.debit}})
+	// if entry.Debit != 0 {
+	// 	filters = append(filters, bson.D{{"debit", entry.Debit}})
 	// }
 	// if entry.credit != 0 {
 	// 	filters = append(filters, bson.D{{"credit", entry.credit}})
@@ -228,12 +228,7 @@ func findMatchingEntriesInMongo(entry Expense) {
 	// 	filter = bson.D{{"$and", filters}}
 	// }
 
-	filter := bson.D{
-		{"$and", bson.A{
-			bson.D{{"year", 2024}},
-			// bson.D{{"month", 7}},
-		}},
-	}
+	filter := bson.M{"year": 2024}
 
 	ctx := context.TODO()
 
@@ -257,18 +252,11 @@ func findMatchingEntriesInMongo(entry Expense) {
 	}
 	defer cursor.Close(ctx)
 
-	for cursor.Next(ctx) {
-		var result bson.M
-		if err := cursor.Decode(&result); err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(result)
+	var expenses []Expense
+	if err = cursor.All(ctx, &expenses); err != nil {
+		panic(err)
 	}
 
-	if err := cursor.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("complete")
+	fmt.Println(expenses)
 
 }

@@ -13,3 +13,9 @@ Installation
 3. Clone this repo
 4. `cd` into the repo
 3. Enter `go run .` to launch the TUI
+
+Managing mongodb from mongosh:
+```
+show dbs
+use budgie
+db.expenses.find

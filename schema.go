@@ -1,14 +1,19 @@
 package main
 
+import "go.mongodb.org/mongo-driver/bson/primitive"
+
+// Fields have to start with capital letter or else they
+// will not be properly entered into MongoDB!
 type Expense struct {
-	month       int
-	day         int
-	year        int
-	description string
-	debit       float64
-	credit      float64
-	total       float64
-	valid       bool
+	ID          primitive.ObjectID `bson:"_id,omitempty"`
+	Month       int                `bson:"month,omitempty"`
+	Day         int                `bson:"day,omitempty"`
+	Year        int                `bson:"year,omitempty"`
+	Description string             `bson:"description,omitempty"`
+	Debit       float64            `bson:"debit,omitempty"`
+	Credit      float64            `bson:"credit,omitempty"`
+	Total       float64            `bson:"total,omitempty"`
+	Valid       bool               `bson:"valid,omitempty"`
 }
 
 // could use reflection, but mapping struct fields to index is clearer

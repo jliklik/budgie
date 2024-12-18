@@ -77,21 +77,21 @@ func displayExpenses(expenses []Expense) string {
 	for _, entry := range expenses {
 
 		style := selectedStyle
-		if !entry.valid {
+		if !entry.Valid {
 			style = errorStyle
 		}
 
-		line := style.Width(DateWidth).Render(strconv.Itoa(entry.year))
+		line := style.Width(DateWidth).Render(strconv.Itoa(entry.Year))
 		line += " | "
-		line += style.Width(DateWidth).Render(strconv.Itoa(entry.month))
+		line += style.Width(DateWidth).Render(strconv.Itoa(entry.Month))
 		line += " | "
-		line += style.Width(DateWidth).Render(strconv.Itoa(entry.day))
+		line += style.Width(DateWidth).Render(strconv.Itoa(entry.Day))
 		line += " | "
-		line += style.Width(DescriptionWidth).Render(entry.description)
+		line += style.Width(DescriptionWidth).Render(entry.Description)
 		line += " | "
-		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.debit, 'f', 2, 64))
+		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Debit, 'f', 2, 64))
 		line += " | "
-		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.credit, 'f', 2, 64))
+		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
 		s += line + "\n"
 	}
 
