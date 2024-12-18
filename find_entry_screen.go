@@ -78,6 +78,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid year!"
 					}
 				} else {
+					m.entry_to_search.Year = 0
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
@@ -94,6 +95,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid month! Format: Jan, Feb, Mar, etc."
 					}
 				} else {
+					m.entry_to_search.Month = 0
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
@@ -110,6 +112,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid day! Must be between 1 and 31."
 					}
 				} else {
+					m.entry_to_search.Day = 0
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
@@ -131,6 +134,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid debit amount!"
 					}
 				} else {
+					m.entry_to_search.Debit = 0
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
@@ -146,14 +150,13 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid debit amount!"
 					}
 				} else {
+					m.entry_to_search.Credit = 0
 					m.validated[m.cursor] = true
 					m.feedback = "Press Ctrl+C to go back."
 				}
-
-				if allValid(m) {
-					fmt.Println("all valid")
-					findMatchingEntriesInMongo(m.entry_to_search)
-				}
+			}
+			if allValid(m) {
+				m.found_entries = findMatchingEntriesInMongo(m.entry_to_search)
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
@@ -166,7 +169,13 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m findEntryScreenModel) View() string {
-	s := textStyle.Render("Enter in details of entry to search for. Leave blank to search all.") + "\n"
+	s := renderSearchBox(m, "")
+	s = renderExpenses(m, s)
+	return s
+}
+
+func renderSearchBox(m findEntryScreenModel, s string) string {
+	s += textStyle.Render("Enter in details of entry to search for. Leave blank to search all.") + "\n"
 	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Year: ") +
 		selectStyle(m, expense_year).Width(FindEntryScreenWidth).Render(m.fields[expense_year]) + "\n"
 	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Month: ") +
@@ -179,7 +188,43 @@ func (m findEntryScreenModel) View() string {
 		selectStyle(m, expense_debit).Width(FindEntryScreenWidth).Render(m.fields[expense_debit]) + "\n"
 	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Credit: ") +
 		selectStyle(m, expense_credit).Width(FindEntryScreenWidth).Render(m.fields[expense_credit]) + "\n"
-	s += textStyle.Render(m.feedback)
+	s += textStyle.Render(m.feedback) + "\n"
+
+	return s
+}
+
+func renderExpenses(m findEntryScreenModel, s string) string {
+
+	s += "\n" + textStyle.Width(FindEntryScreenWidth).Render("Matching Entries") + "\n"
+
+	s += textStyle.Width(DateWidth).Render("Year")
+	s += " | "
+	s += textStyle.Width(DateWidth).Render("Month")
+	s += " | "
+	s += textStyle.Width(DateWidth).Render("Day")
+	s += " | "
+	s += textStyle.Width(DescriptionWidth).Render("Description")
+	s += " | "
+	s += textStyle.Width(DefaultWidth).Render("Debit")
+	s += " | "
+	s += textStyle.Width(DefaultWidth).Render("Credit")
+	s += "\n"
+
+	for _, entry := range m.found_entries {
+		line := inactiveStyle.Width(DateWidth).Render(strconv.Itoa(entry.Year))
+		line += " | "
+		line += inactiveStyle.Width(DateWidth).Render(strconv.Itoa(entry.Month))
+		line += " | "
+		line += inactiveStyle.Width(DateWidth).Render(strconv.Itoa(entry.Day))
+		line += " | "
+		line += inactiveStyle.Width(DescriptionWidth).Render(entry.Description)
+		line += " | "
+		line += inactiveStyle.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Debit, 'f', 2, 64))
+		line += " | "
+		line += inactiveStyle.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
+		s += line + "\n"
+	}
+
 	return s
 }
 
@@ -202,33 +247,31 @@ func allValid(m findEntryScreenModel) bool {
 	return true
 }
 
-func findMatchingEntriesInMongo(entry Expense) {
-	// filters := bson.A{}
-	// if entry.year != 0 {
-	// 	filters = append(filters, bson.D{{"year", entry.year}})
-	// }
-	// if entry.Month != 0 {
-	// 	filters = append(filters, bson.D{{"month", entry.Month}})
-	// }
-	// if entry.Day != 0 {
-	// 	filters = append(filters, bson.D{{"day", entry.Day}})
-	// }
-	// if entry.Description != "" {
-	// 	filters = append(filters, bson.D{{"description", entry.Description}})
-	// }
-	// if entry.Debit != 0 {
-	// 	filters = append(filters, bson.D{{"debit", entry.Debit}})
-	// }
-	// if entry.credit != 0 {
-	// 	filters = append(filters, bson.D{{"credit", entry.credit}})
-	// }
+func findMatchingEntriesInMongo(entry Expense) []Expense {
+	filters := bson.A{}
+	if entry.Year != 0 {
+		filters = append(filters, bson.M{"year": entry.Year}) //bson.M stands for Map type
+	}
+	if entry.Month != 0 {
+		filters = append(filters, bson.M{"month": entry.Month})
+	}
+	if entry.Day != 0 {
+		filters = append(filters, bson.M{"day": entry.Day})
+	}
+	if entry.Description != "" {
+		filters = append(filters, bson.M{"description": entry.Description})
+	}
+	if entry.Debit != 0 {
+		filters = append(filters, bson.M{"debit": entry.Debit})
+	}
+	if entry.Credit != 0 {
+		filters = append(filters, bson.M{"credit": entry.Credit})
+	}
 
-	// var filter bson.D
-	// if len(filters) > 0 {
-	// 	filter = bson.D{{"$and", filters}}
-	// }
-
-	filter := bson.M{"year": 2024}
+	filter := bson.D{} // bson.D is a list
+	if len(filters) > 0 {
+		filter = bson.D{{"$and", filters}}
+	}
 
 	ctx := context.TODO()
 
@@ -257,6 +300,5 @@ func findMatchingEntriesInMongo(entry Expense) {
 		panic(err)
 	}
 
-	fmt.Println(expenses)
-
+	return expenses
 }
