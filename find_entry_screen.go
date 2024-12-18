@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"log"
 	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type findEntryScreenModel struct {
@@ -61,34 +67,52 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			switch m.cursor {
 			case expense_year:
-				year, err := strconv.Atoi(m.fields[m.cursor])
-				if err == nil {
-					m.entry_to_search.year = year
+				if m.fields[m.cursor] != "" {
+					year, err := strconv.Atoi(m.fields[m.cursor])
+					if err == nil {
+						m.entry_to_search.year = year
+						m.validated[m.cursor] = true
+						m.cursor++
+						m.feedback = "Press Ctrl+C to go back."
+					} else {
+						m.feedback = "Invalid year!"
+					}
+				} else {
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
-				} else {
-					m.feedback = "Invalid year!"
 				}
 			case expense_month:
-				month, err := time.Parse("Jan", m.fields[m.cursor])
-				if err == nil {
-					m.entry_to_search.month = int(month.Month())
+				if m.fields[m.cursor] != "" {
+					month, err := time.Parse("Jan", m.fields[m.cursor])
+					if err == nil {
+						m.entry_to_search.month = int(month.Month())
+						m.validated[m.cursor] = true
+						m.cursor++
+						m.feedback = "Press Ctrl+C to go back."
+					} else {
+						m.feedback = "Invalid month! Format: Jan, Feb, Mar, etc."
+					}
+				} else {
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
-				} else {
-					m.feedback = "Invalid month! Format: Jan, Feb, Mar, etc."
 				}
 			case expense_day:
-				day, err := strconv.Atoi(m.fields[m.cursor])
-				if err == nil && day >= 1 && day <= 31 {
-					m.entry_to_search.day = day
+				if m.fields[m.cursor] != "" {
+					day, err := strconv.Atoi(m.fields[m.cursor])
+					if err == nil && day >= 1 && day <= 31 {
+						m.entry_to_search.day = day
+						m.validated[m.cursor] = true
+						m.cursor++
+						m.feedback = "Press Ctrl+C to go back."
+					} else {
+						m.feedback = "Invalid day! Must be between 1 and 31."
+					}
+				} else {
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
-				} else {
-					m.feedback = "Invalid day! Must be between 1 and 31."
 				}
 			case expense_description:
 				m.entry_to_search.description = m.fields[m.cursor]
@@ -96,25 +120,40 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 				m.feedback = "Press Ctrl+C to go back."
 			case expense_debit:
-				val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
-				if err == nil {
-					m.entry_to_search.debit = val
+				if m.fields[m.cursor] != "" {
+					val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
+					if err == nil {
+						m.entry_to_search.debit = val
+						m.validated[m.cursor] = true
+						m.cursor++
+						m.feedback = "Press Ctrl+C to go back."
+					} else {
+						m.feedback = "Invalid debit amount!"
+					}
+				} else {
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
-				} else {
-					m.feedback = "Invalid debit amount!"
 				}
 			case expense_credit:
-				val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
-				if err == nil {
-					m.entry_to_search.debit = val
+				if m.fields[m.cursor] != "" {
+					val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
+					if err == nil {
+						m.entry_to_search.debit = val
+						m.validated[m.cursor] = true
+						m.feedback = "Press Ctrl+C to go back."
+					} else {
+						m.feedback = "Invalid debit amount!"
+					}
+				} else {
 					m.validated[m.cursor] = true
 					m.feedback = "Press Ctrl+C to go back."
-				} else {
-					m.feedback = "Invalid debit amount!"
 				}
 
+				if allValid(m) {
+					fmt.Println("all valid")
+					findMatchingEntriesInMongo(m.entry_to_search)
+				}
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
@@ -154,13 +193,82 @@ func selectStyle(m findEntryScreenModel, index int) lipgloss.Style {
 	}
 }
 
-// See if entry is already in DB before inserting it
-// filter := bson.D{{"year", entry.year}, {"month", entry.month}, {"day", entry.day}, {"description", entry.description}, {"debit", entry.debit}, {"credit", entry.credit}}
-// cursor, err := coll.Find(context.TODO(), filter)
-// if err != nil {
-// 	panic(err)
-// }
-// var results []Expense
-// if err = cursor.All(context.TODO(), &results); err != nil {
-// 	panic(err)
-// }
+func allValid(m findEntryScreenModel) bool {
+	for _, value := range m.validated {
+		if !value {
+			return false
+		}
+	}
+	return true
+}
+
+func findMatchingEntriesInMongo(entry Expense) {
+	// filters := bson.A{}
+	// if entry.year != 0 {
+	// 	filters = append(filters, bson.D{{"year", entry.year}})
+	// }
+	// if entry.month != 0 {
+	// 	filters = append(filters, bson.D{{"month", entry.month}})
+	// }
+	// if entry.day != 0 {
+	// 	filters = append(filters, bson.D{{"day", entry.day}})
+	// }
+	// if entry.description != "" {
+	// 	filters = append(filters, bson.D{{"description", entry.description}})
+	// }
+	// if entry.debit != 0 {
+	// 	filters = append(filters, bson.D{{"debit", entry.debit}})
+	// }
+	// if entry.credit != 0 {
+	// 	filters = append(filters, bson.D{{"credit", entry.credit}})
+	// }
+
+	// var filter bson.D
+	// if len(filters) > 0 {
+	// 	filter = bson.D{{"$and", filters}}
+	// }
+
+	filter := bson.D{
+		{"$and", bson.A{
+			bson.D{{"year", 2024}},
+			// bson.D{{"month", 7}},
+		}},
+	}
+
+	ctx := context.TODO()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	coll := client.Database(MongoDb).Collection(MongoCollection)
+
+	cursor, err := coll.Find(ctx, filter)
+	if err != nil {
+		fmt.Println("error")
+		log.Fatal(err)
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var result bson.M
+		if err := cursor.Decode(&result); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(result)
+	}
+
+	if err := cursor.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("complete")
+
+}
