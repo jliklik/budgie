@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -26,13 +25,20 @@ type findEntryScreenModel struct {
 const FindEntryScreenWidth = 30
 const FindEntryScreenLabelWidth = 15
 const num_expense_search_fields = expense_credit + 1
+const invalid = -99
 
 func createFindEntryScreenModel() findEntryScreenModel {
 	return findEntryScreenModel{
-		entry_to_search: Expense{},
-		validated:       [num_expense_search_fields]bool{false, false, false, false, false, false},
-		found_entries:   nil,
-		feedback:        "Press Ctrl+C to go back.",
+		entry_to_search: Expense{
+			Month:  invalid,
+			Day:    invalid,
+			Year:   invalid,
+			Debit:  invalid,
+			Credit: invalid,
+		},
+		validated:     [num_expense_search_fields]bool{false, false, false, false, false, false},
+		found_entries: nil,
+		feedback:      "Press Ctrl+C to go back.",
 	}
 }
 
@@ -52,7 +58,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down":
-			if m.cursor < num_expense_search_fields {
+			if m.cursor < expense_credit {
 				m.cursor++
 			}
 		case "left":
@@ -78,7 +84,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid year!"
 					}
 				} else {
-					m.entry_to_search.Year = 0
+					m.entry_to_search.Year = invalid
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
@@ -95,7 +101,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid month! Format: Jan, Feb, Mar, etc."
 					}
 				} else {
-					m.entry_to_search.Month = 0
+					m.entry_to_search.Month = invalid
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
@@ -112,7 +118,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid day! Must be between 1 and 31."
 					}
 				} else {
-					m.entry_to_search.Day = 0
+					m.entry_to_search.Day = invalid
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
@@ -134,7 +140,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.feedback = "Invalid debit amount!"
 					}
 				} else {
-					m.entry_to_search.Debit = 0
+					m.entry_to_search.Debit = invalid
 					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
@@ -143,14 +149,14 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.fields[m.cursor] != "" {
 					val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
 					if err == nil {
-						m.entry_to_search.Debit = val
+						m.entry_to_search.Credit = val
 						m.validated[m.cursor] = true
 						m.feedback = "Press Ctrl+C to go back."
 					} else {
 						m.feedback = "Invalid debit amount!"
 					}
 				} else {
-					m.entry_to_search.Credit = 0
+					m.entry_to_search.Credit = invalid
 					m.validated[m.cursor] = true
 					m.feedback = "Press Ctrl+C to go back."
 				}
@@ -249,22 +255,23 @@ func allValid(m findEntryScreenModel) bool {
 
 func findMatchingEntriesInMongo(entry Expense) []Expense {
 	filters := bson.A{}
-	if entry.Year != 0 {
+
+	if entry.Year != invalid {
 		filters = append(filters, bson.M{"year": entry.Year}) //bson.M stands for Map type
 	}
-	if entry.Month != 0 {
+	if entry.Month != invalid {
 		filters = append(filters, bson.M{"month": entry.Month})
 	}
-	if entry.Day != 0 {
+	if entry.Day != invalid {
 		filters = append(filters, bson.M{"day": entry.Day})
 	}
 	if entry.Description != "" {
 		filters = append(filters, bson.M{"description": entry.Description})
 	}
-	if entry.Debit != 0 {
+	if entry.Debit != invalid {
 		filters = append(filters, bson.M{"debit": entry.Debit})
 	}
-	if entry.Credit != 0 {
+	if entry.Credit != invalid {
 		filters = append(filters, bson.M{"credit": entry.Credit})
 	}
 
@@ -290,7 +297,6 @@ func findMatchingEntriesInMongo(entry Expense) []Expense {
 
 	cursor, err := coll.Find(ctx, filter)
 	if err != nil {
-		fmt.Println("error")
 		log.Fatal(err)
 	}
 	defer cursor.Close(ctx)

@@ -6,12 +6,12 @@ import "go.mongodb.org/mongo-driver/bson/primitive"
 // will not be properly entered into MongoDB!
 type Expense struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
-	Month       int                `bson:"month,omitempty"`
-	Day         int                `bson:"day,omitempty"`
-	Year        int                `bson:"year,omitempty"`
-	Description string             `bson:"description,omitempty"`
-	Debit       float64            `bson:"debit,omitempty"`
-	Credit      float64            `bson:"credit,omitempty"`
+	Month       int                `bson:"month"`
+	Day         int                `bson:"day"`
+	Year        int                `bson:"year"`
+	Description string             `bson:"description"`
+	Debit       float64            `bson:"debit"`
+	Credit      float64            `bson:"credit"`
 	Total       float64            `bson:"total,omitempty"`
 	Valid       bool               `bson:"valid,omitempty"`
 }

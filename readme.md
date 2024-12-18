@@ -15,7 +15,10 @@ Installation
 3. Enter `go run .` to launch the TUI
 
 Managing mongodb from mongosh:
+
 ```
 show dbs
 use budgie
 db.expenses.find
+
+Deleting from db: `db.expenses.deleteMany({})`
