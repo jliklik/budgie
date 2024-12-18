@@ -11,15 +11,17 @@ type Expense struct {
 	valid       bool
 }
 
+// could use reflection, but mapping struct fields to index is clearer
 const (
+	expense_year        = iota
 	expense_month       = iota
 	expense_day         = iota
-	expense_year        = iota
 	expense_description = iota
 	expense_debit       = iota
 	expense_credit      = iota
 	expense_total       = iota
 	expense_valid       = iota
+	num_expense_fields  = iota
 )
 
 const (
