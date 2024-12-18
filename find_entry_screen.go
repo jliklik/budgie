@@ -9,7 +9,8 @@ import (
 )
 
 type findEntryScreenModel struct {
-	fields          [num_expense_fields]string
+	fields          [num_expense_search_fields]string
+	validated       [num_expense_search_fields]bool
 	feedback        string
 	cursor          int
 	entry_to_search Expense
@@ -18,10 +19,12 @@ type findEntryScreenModel struct {
 
 const FindEntryScreenWidth = 30
 const FindEntryScreenLabelWidth = 15
+const num_expense_search_fields = expense_credit + 1
 
 func createFindEntryScreenModel() findEntryScreenModel {
 	return findEntryScreenModel{
 		entry_to_search: Expense{},
+		validated:       [num_expense_search_fields]bool{false, false, false, false, false, false},
 		found_entries:   nil,
 		feedback:        "Press Ctrl+C to go back.",
 	}
@@ -39,11 +42,11 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 
 		case "up":
-			if m.cursor < expense_valid {
+			if m.cursor > expense_year {
 				m.cursor--
 			}
 		case "down":
-			if m.cursor > 0 {
+			if m.cursor < num_expense_search_fields {
 				m.cursor++
 			}
 		case "left":
@@ -61,6 +64,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				year, err := strconv.Atoi(m.fields[m.cursor])
 				if err == nil {
 					m.entry_to_search.year = year
+					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
 				} else {
@@ -70,6 +74,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				month, err := time.Parse("Jan", m.fields[m.cursor])
 				if err == nil {
 					m.entry_to_search.month = int(month.Month())
+					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
 				} else {
@@ -79,6 +84,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				day, err := strconv.Atoi(m.fields[m.cursor])
 				if err == nil && day >= 1 && day <= 31 {
 					m.entry_to_search.day = day
+					m.validated[m.cursor] = true
 					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
 				} else {
@@ -86,12 +92,15 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case expense_description:
 				m.entry_to_search.description = m.fields[m.cursor]
+				m.validated[m.cursor] = true
 				m.cursor++
 				m.feedback = "Press Ctrl+C to go back."
 			case expense_debit:
 				val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
 				if err == nil {
 					m.entry_to_search.debit = val
+					m.validated[m.cursor] = true
+					m.cursor++
 					m.feedback = "Press Ctrl+C to go back."
 				} else {
 					m.feedback = "Invalid debit amount!"
@@ -100,6 +109,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				val, err := strconv.ParseFloat(m.fields[m.cursor], 64)
 				if err == nil {
 					m.entry_to_search.debit = val
+					m.validated[m.cursor] = true
 					m.feedback = "Press Ctrl+C to go back."
 				} else {
 					m.feedback = "Invalid debit amount!"
@@ -118,12 +128,18 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m findEntryScreenModel) View() string {
 	s := textStyle.Render("Enter in details of entry to search for. Leave blank to search all.") + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Year: ") + selectStyle(m, expense_year).Render(m.fields[expense_year]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Month: ") + selectStyle(m, expense_month).Render(m.fields[expense_month]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Day: ") + selectStyle(m, expense_day).Render(m.fields[expense_day]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Description: ") + selectStyle(m, expense_description).Render(m.fields[expense_description]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Debit: ") + selectStyle(m, expense_debit).Render(m.fields[expense_debit]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Credit: ") + selectStyle(m, expense_credit).Render(m.fields[expense_credit]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Year: ") +
+		selectStyle(m, expense_year).Width(FindEntryScreenWidth).Render(m.fields[expense_year]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Month: ") +
+		selectStyle(m, expense_month).Width(FindEntryScreenWidth).Render(m.fields[expense_month]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Day: ") +
+		selectStyle(m, expense_day).Width(FindEntryScreenWidth).Render(m.fields[expense_day]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Description: ") +
+		selectStyle(m, expense_description).Width(FindEntryScreenWidth).Render(m.fields[expense_description]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Debit: ") +
+		selectStyle(m, expense_debit).Width(FindEntryScreenWidth).Render(m.fields[expense_debit]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Credit: ") +
+		selectStyle(m, expense_credit).Width(FindEntryScreenWidth).Render(m.fields[expense_credit]) + "\n"
 	s += textStyle.Render(m.feedback)
 	return s
 }
@@ -131,9 +147,11 @@ func (m findEntryScreenModel) View() string {
 func selectStyle(m findEntryScreenModel, index int) lipgloss.Style {
 	if m.cursor == index {
 		return selectedStyle.PaddingLeft(2).PaddingRight(2)
+	} else if !m.validated[index] {
+		return errorStyle.PaddingLeft(2).PaddingRight(2)
+	} else {
+		return inactiveStyle.PaddingLeft(2).PaddingRight(2)
 	}
-
-	return errorStyle.PaddingLeft(2).PaddingRight(2)
 }
 
 // See if entry is already in DB before inserting it

@@ -8,10 +8,10 @@ var textStyle = lipgloss.NewStyle().
 	Background(lipgloss.Color("#1f4fd1")).
 	Align(lipgloss.Left)
 
-var promptStyle = lipgloss.NewStyle().
+var inactiveStyle = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(lipgloss.Color("#FAFAFA")).
-	Background(lipgloss.Color("#fcc319")).
+	Background(lipgloss.Color("#b268f2")).
 	Align(lipgloss.Left)
 
 var selectedStyle = lipgloss.NewStyle().
