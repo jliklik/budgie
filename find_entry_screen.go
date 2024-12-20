@@ -14,18 +14,20 @@ import (
 )
 
 type findEntryScreenModel struct {
-	fields          [num_expense_search_fields]string
-	validated       [num_expense_search_fields]bool
-	feedback        string
-	cursor          int
-	entry_to_search Expense
-	found_entries   []Expense
+	fields                 [num_expense_search_fields]string
+	validated              [num_expense_search_fields]bool
+	feedback               string
+	cursor                 int
+	entry_to_search        Expense
+	found_entries          []Expense
+	found_entries_page_idx int
 }
 
 const FindEntryScreenWidth = 30
 const FindEntryScreenLabelWidth = 15
 const num_expense_search_fields = expense_credit + 1
 const invalid = -99
+const num_entries_per_page = 10
 
 func createFindEntryScreenModel() findEntryScreenModel {
 	return findEntryScreenModel{
@@ -62,9 +64,14 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case "left":
-			// do nothing
+			if m.found_entries_page_idx > 0 {
+				m.found_entries_page_idx--
+			}
 		case "right":
-			// do nothing
+			num_pages := len(m.found_entries) / num_entries_per_page
+			if m.found_entries_page_idx < num_pages {
+				m.found_entries_page_idx++
+			}
 		case "backspace":
 			sz := len(m.fields[m.cursor])
 			if sz >= 1 {
@@ -201,8 +208,19 @@ func renderSearchBox(m findEntryScreenModel, s string) string {
 
 func renderExpenses(m findEntryScreenModel, s string) string {
 
-	s += "\n" + textStyle.Width(FindEntryScreenWidth).Render("Matching Entries") + "\n"
+	s += "\n" + textStyle.Width((DateWidth+3)*3).Render("Matching Entries")
 
+	if len(m.found_entries) > 0 {
+		page_str := "Entries: " +
+			strconv.Itoa(m.found_entries_page_idx*num_entries_per_page+1) + "-" +
+			strconv.Itoa(min((m.found_entries_page_idx+1)*num_entries_per_page, len(m.found_entries))) + " / " +
+			strconv.Itoa(len(m.found_entries))
+
+		s += textStyle.Width(DescriptionWidth + 3).Render(page_str)
+		s += textStyle.Width(DefaultWidth*2 + 3).Render("Press < or > to switch pages")
+	}
+
+	s += "\n"
 	s += textStyle.Width(DateWidth).Render("Year")
 	s += " | "
 	s += textStyle.Width(DateWidth).Render("Month")
@@ -216,7 +234,14 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 	s += textStyle.Width(DefaultWidth).Render("Credit")
 	s += "\n"
 
-	for _, entry := range m.found_entries {
+	// slice entries
+	sliced_entries := m.found_entries
+	if len(m.found_entries) > num_entries_per_page {
+		end_idx := min(len(m.found_entries), (m.found_entries_page_idx+1)*num_entries_per_page)
+		sliced_entries = m.found_entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
+	}
+
+	for _, entry := range sliced_entries {
 		line := inactiveStyle.Width(DateWidth).Render(strconv.Itoa(entry.Year))
 		line += " | "
 		line += inactiveStyle.Width(DateWidth).Render(strconv.Itoa(entry.Month))

@@ -13,7 +13,7 @@ type postInsertCSVScreenModel struct {
 
 const DateWidth = 5
 const DefaultWidth = 15
-const DescriptionWidth = 30
+const DescriptionWidth = 36
 const LegendWidth = 50
 
 func createPostInsertCSVScreenModel(filename string, expenses []Expense) postInsertCSVScreenModel {
