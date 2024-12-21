@@ -291,7 +291,11 @@ func findMatchingEntriesInMongo(entry Expense) []Expense {
 		filters = append(filters, bson.M{"day": entry.Day})
 	}
 	if entry.Description != "" {
-		filters = append(filters, bson.M{"description": entry.Description})
+		filters = append(filters, bson.M{
+			"description": bson.M{
+				"$regex":   ".*" + entry.Description + ".*", // Matches any string containing entry description
+				"$options": "i",                             // Case-insensitive search
+			}})
 	}
 	if entry.Debit != invalid {
 		filters = append(filters, bson.M{"debit": entry.Debit})
