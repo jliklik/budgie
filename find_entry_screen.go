@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -20,6 +21,7 @@ type findEntryScreenModel struct {
 	cursor                 int
 	entry_to_search        Expense
 	found_entries          []Expense
+	selected_entries       []bool
 	found_entries_page_idx int
 }
 
@@ -38,9 +40,10 @@ func createFindEntryScreenModel() findEntryScreenModel {
 			Debit:  invalid,
 			Credit: invalid,
 		},
-		validated:     [num_expense_search_fields]bool{false, false, false, false, false, false},
-		found_entries: nil,
-		feedback:      "Press Ctrl+C to go back.",
+		validated:        [num_expense_search_fields]bool{false, false, false, false, false, false},
+		found_entries:    nil,
+		selected_entries: nil,
+		feedback:         "Press Ctrl+C to go back.",
 	}
 }
 
@@ -170,6 +173,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if allValid(m) {
 				m.found_entries = findMatchingEntriesInMongo(m.entry_to_search)
+				m.selected_entries = make([]bool, len(m.found_entries))
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
@@ -232,6 +236,8 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 	s += textStyle.Width(DefaultWidth).Render("Debit")
 	s += " | "
 	s += textStyle.Width(DefaultWidth).Render("Credit")
+	s += " | "
+	s += textStyle.Width(DefaultWidth).Render("Selected")
 	s += "\n"
 
 	// slice entries
@@ -241,7 +247,7 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 		sliced_entries = m.found_entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
 	}
 
-	for _, entry := range sliced_entries {
+	for i, entry := range sliced_entries {
 		line := inactiveStyle.Width(DateWidth).Render(strconv.Itoa(entry.Year))
 		line += " | "
 		line += inactiveStyle.Width(DateWidth).Render(strconv.Itoa(entry.Month))
@@ -253,6 +259,12 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 		line += inactiveStyle.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Debit, 'f', 2, 64))
 		line += " | "
 		line += inactiveStyle.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
+		line += " | "
+		selected := " "
+		if m.selected_entries[i] {
+			selected = "X"
+		}
+		line += fmt.Sprintf("[%s]", selected)
 		s += line + "\n"
 	}
 
