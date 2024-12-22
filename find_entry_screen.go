@@ -17,6 +17,8 @@ import (
 const (
 	search_view  = iota
 	entries_view = iota
+	action_view  = iota
+	num_views    = iota
 )
 
 type findEntryScreenModel struct {
@@ -37,6 +39,7 @@ const FindEntryScreenLabelWidth = 15
 const num_expense_search_fields = expense_credit + 1
 const invalid = -99
 const num_entries_per_page = 10
+const default_feedback = "Press Ctrl+C to go back to home screen."
 
 func createFindEntryScreenModel() findEntryScreenModel {
 	return findEntryScreenModel{
@@ -50,7 +53,7 @@ func createFindEntryScreenModel() findEntryScreenModel {
 		validated:        [num_expense_search_fields]bool{false, false, false, false, false, false},
 		found_entries:    nil,
 		selected_entries: nil,
-		feedback:         "Press Ctrl+C to go back.",
+		feedback:         default_feedback,
 		active_view:      search_view,
 	}
 }
@@ -71,11 +74,11 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.search_cursor > expense_year {
 					m.search_cursor--
 				}
-			} else {
+			} else if m.active_view == entries_view {
 				if m.entries_cursor > 0 {
 					m.entries_cursor--
 				} else {
-					m.active_view = search_view
+					// m.active_view = search_view
 				}
 			}
 		case "down":
@@ -83,11 +86,11 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.search_cursor < expense_credit {
 					m.search_cursor++
 				} else {
-					if len(m.found_entries) > 0 {
-						m.active_view = entries_view
-					}
+					// if len(m.found_entries) > 0 {
+					// 	m.active_view = entries_view
+					// }
 				}
-			} else {
+			} else if m.active_view == entries_view {
 				num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
 				if m.entries_cursor < num_entries_on_page-1 {
 					m.entries_cursor++
@@ -109,6 +112,14 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if sz >= 1 {
 				m.fields[m.search_cursor] = m.fields[m.search_cursor][:sz-1]
 			}
+		case "tab":
+			m.active_view = (m.active_view + 1) % num_views
+			if m.active_view == action_view && numSelected(m) == 0 {
+				m.active_view = search_view // fast forward back to search view if no entries selected
+			}
+			if m.active_view == entries_view && len(m.found_entries) == 0 {
+				m.active_view = search_view // fast forward back to search view if no entries selected
+			}
 		case "enter":
 			if m.active_view == search_view {
 				switch m.search_cursor {
@@ -119,15 +130,16 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.entry_to_search.Year = year
 							m.validated[m.search_cursor] = true
 							m.search_cursor++
-							m.feedback = "Press Ctrl+C to go back."
+							m.feedback = default_feedback
 						} else {
+							m.validated[m.search_cursor] = false
 							m.feedback = "Invalid year!"
 						}
 					} else {
 						m.entry_to_search.Year = invalid
 						m.validated[m.search_cursor] = true
 						m.search_cursor++
-						m.feedback = "Press Ctrl+C to go back."
+						m.feedback = default_feedback
 					}
 				case expense_month:
 					if m.fields[m.search_cursor] != "" {
@@ -136,15 +148,16 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.entry_to_search.Month = int(month.Month())
 							m.validated[m.search_cursor] = true
 							m.search_cursor++
-							m.feedback = "Press Ctrl+C to go back."
+							m.feedback = default_feedback
 						} else {
+							m.validated[m.search_cursor] = false
 							m.feedback = "Invalid month! Format: Jan, Feb, Mar, etc."
 						}
 					} else {
 						m.entry_to_search.Month = invalid
 						m.validated[m.search_cursor] = true
 						m.search_cursor++
-						m.feedback = "Press Ctrl+C to go back."
+						m.feedback = default_feedback
 					}
 				case expense_day:
 					if m.fields[m.search_cursor] != "" {
@@ -153,21 +166,22 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.entry_to_search.Day = day
 							m.validated[m.search_cursor] = true
 							m.search_cursor++
-							m.feedback = "Press Ctrl+C to go back."
+							m.feedback = default_feedback
 						} else {
+							m.validated[m.search_cursor] = false
 							m.feedback = "Invalid day! Must be between 1 and 31."
 						}
 					} else {
 						m.entry_to_search.Day = invalid
 						m.validated[m.search_cursor] = true
 						m.search_cursor++
-						m.feedback = "Press Ctrl+C to go back."
+						m.feedback = default_feedback
 					}
 				case expense_description:
 					m.entry_to_search.Description = m.fields[m.search_cursor]
 					m.validated[m.search_cursor] = true
 					m.search_cursor++
-					m.feedback = "Press Ctrl+C to go back."
+					m.feedback = default_feedback
 				case expense_debit:
 					if m.fields[m.search_cursor] != "" {
 						val, err := strconv.ParseFloat(m.fields[m.search_cursor], 64)
@@ -175,15 +189,16 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.entry_to_search.Debit = val
 							m.validated[m.search_cursor] = true
 							m.search_cursor++
-							m.feedback = "Press Ctrl+C to go back."
+							m.feedback = default_feedback
 						} else {
+							m.validated[m.search_cursor] = false
 							m.feedback = "Invalid debit amount!"
 						}
 					} else {
 						m.entry_to_search.Debit = invalid
 						m.validated[m.search_cursor] = true
 						m.search_cursor++
-						m.feedback = "Press Ctrl+C to go back."
+						m.feedback = default_feedback
 					}
 				case expense_credit:
 					if m.fields[m.search_cursor] != "" {
@@ -191,26 +206,29 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if err == nil {
 							m.entry_to_search.Credit = val
 							m.validated[m.search_cursor] = true
-							m.feedback = "Press Ctrl+C to go back."
+							m.feedback = default_feedback
 						} else {
+							m.validated[m.search_cursor] = false
 							m.feedback = "Invalid debit amount!"
 						}
 					} else {
 						m.entry_to_search.Credit = invalid
 						m.validated[m.search_cursor] = true
-						m.feedback = "Press Ctrl+C to go back."
+						m.feedback = default_feedback
 					}
 				}
 				if allValid(m) {
 					m.found_entries = findMatchingEntriesInMongo(m.entry_to_search)
 					m.selected_entries = make([]bool, len(m.found_entries))
 				}
-			} else {
+			} else if m.active_view == entries_view {
 				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
 					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
 				} else {
 					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
 				}
+			} else {
+				// TODO: delete selected entries
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
@@ -223,8 +241,10 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m findEntryScreenModel) View() string {
-	s := renderSearchBox(m, "")
+	s := ""
+	s = renderSearchBox(m, s)
 	s = renderExpenses(m, s)
+	s = renderActions(m, s)
 	return s
 }
 
@@ -258,6 +278,7 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 	if m.active_view == entries_view {
 		sym = "[x]"
 	}
+
 	s += "\n" + textStyle.Width((DateWidth+3)*3).Render("Matching Entries")
 
 	if len(m.found_entries) > 0 {
@@ -272,6 +293,7 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 		// s += textStyle.Width(DefaultWidth).Render("Cursor " + strconv.Itoa(m.entries_cursor))
 	}
 
+	s += "\n" + textStyle.Render("Press tab to switch between search, entry, and delete sections.")
 	s += "\n"
 	s += textStyle.Width(DateWidth).Render("Year")
 	s += " | "
@@ -316,6 +338,31 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 		}
 		line += fmt.Sprintf("[%s]", selected)
 		s += line + "\n"
+	}
+
+	return s
+}
+
+func numSelected(m findEntryScreenModel) int {
+	num_selected := 0
+	for _, selected := range m.selected_entries {
+		if selected {
+			num_selected++
+		}
+	}
+	return num_selected
+}
+
+func renderActions(m findEntryScreenModel, s string) string {
+
+	if numSelected(m) > 0 {
+		s += "\n" + textStyle.PaddingRight(2).Render("Delete selected entries?")
+
+		sym := ""
+		if m.active_view == action_view {
+			sym = "Press enter to delete selected entries [x]"
+		}
+		s += activeViewStyle(m, action_view).Render(sym)
 	}
 
 	return s
