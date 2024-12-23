@@ -249,6 +249,8 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selected_entries = make([]bool, len(m.found_entries))
 				// change active view back to search view
 				m.active_view = search_view
+				// reset cursor
+				m.entries_cursor = 0
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
@@ -353,10 +355,12 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 		line += selectEntryStyle(m, i).Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
 		line += " | "
 		selected := " "
+		selected_entry_style := selectEntryStyle(m, i)
 		if sliced_selected_entries[i] {
 			selected = "X"
+			selected_entry_style = selectedStyle
 		}
-		line += fmt.Sprintf("[%s]", selected)
+		line += selected_entry_style.Render(fmt.Sprintf("[%s]", selected))
 		s += line + "\n"
 	}
 
