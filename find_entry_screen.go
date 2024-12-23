@@ -78,7 +78,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.entries_cursor > 0 {
 					m.entries_cursor--
 				} else {
-					// m.active_view = search_view
+					m.active_view = search_view
 				}
 			}
 		case "down":
@@ -86,9 +86,9 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.search_cursor < expense_credit {
 					m.search_cursor++
 				} else {
-					// if len(m.found_entries) > 0 {
-					// 	m.active_view = entries_view
-					// }
+					if len(m.found_entries) > 0 {
+						m.active_view = entries_view
+					}
 				}
 			} else if m.active_view == entries_view {
 				num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
@@ -119,6 +119,15 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.active_view == entries_view && len(m.found_entries) == 0 {
 				m.active_view = search_view // fast forward back to search view if no entries selected
+			}
+		case "x":
+			// does same thing as enter for entries view
+			if m.active_view == entries_view {
+				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
+					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
+				} else {
+					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
+				}
 			}
 		case "enter":
 			if m.active_view == search_view {
@@ -218,7 +227,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				if allValid(m) {
-					m.found_entries = findMatchingEntriesInMongo(m.entry_to_search)
+					m.found_entries = mongoFindMatchingEntries(m.entry_to_search)
 					m.selected_entries = make([]bool, len(m.found_entries))
 				}
 			} else if m.active_view == entries_view {
@@ -228,7 +237,18 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
 				}
 			} else {
-				// TODO: delete selected entries
+				selected_entries := make([]Expense, 0)
+				for idx, selected := range m.selected_entries {
+					if selected {
+						selected_entries = append(selected_entries, m.found_entries[idx])
+					}
+				}
+				mongoDeleteEntries(selected_entries)
+				// refresh the search
+				m.found_entries = mongoFindMatchingEntries(m.entry_to_search)
+				m.selected_entries = make([]bool, len(m.found_entries))
+				// change active view back to search view
+				m.active_view = search_view
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
@@ -403,7 +423,39 @@ func allValid(m findEntryScreenModel) bool {
 	return true
 }
 
-func findMatchingEntriesInMongo(entry Expense) []Expense {
+func mongoDeleteEntries(entries []Expense) {
+	for _, entry := range entries {
+		mongoDeleteEntry(entry)
+	}
+}
+
+func mongoDeleteEntry(entry Expense) {
+
+	ctx := context.TODO()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	coll := client.Database(MongoDb).Collection(MongoCollection)
+
+	filter := bson.M{"_id": entry.ID}
+
+	// Delete the document
+	_, err = coll.DeleteOne(ctx, filter)
+	if err != nil {
+		log.Fatalf("Error deleting document: %v", err)
+	}
+}
+
+func mongoFindMatchingEntries(entry Expense) []Expense {
 	filters := bson.A{}
 
 	if entry.Year != invalid {
