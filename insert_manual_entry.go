@@ -5,14 +5,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	insert_table_view   = iota
+	insert_confirm_view = iota
+	insert_num_views    = iota
+)
+
 type cursor2D struct {
 	x int
 	y int
 }
 
 type manualInsertModel struct {
-	cursor  cursor2D
-	entries []expensePlaceholder
+	active_view int
+	cursor      cursor2D
+	entries     []expensePlaceholder
 }
 
 type expensePlaceholder struct {
@@ -52,39 +59,71 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "up":
-			if m.cursor.y > 0 {
-				m.cursor.y--
+			if m.active_view == insert_confirm_view {
+				m.active_view = insert_table_view
+			} else {
+				if m.cursor.y > 0 {
+					m.cursor.y--
+				}
 			}
 
 		case "down":
 			if m.cursor.y < max_entries-1 {
 				m.cursor.y++
+			} else {
+				m.active_view = insert_confirm_view
 			}
 
 		case "left":
-			if m.cursor.x > 0 {
-				m.cursor.x--
+			if m.active_view == insert_table_view {
+				if m.cursor.x > 0 {
+					m.cursor.x--
+				} else {
+					m.cursor.x = expense_credit
+					m.cursor.y--
+				}
 			}
 
 		case "right":
-			if m.cursor.x < expense_credit {
-				m.cursor.x++
+			if m.active_view == insert_table_view {
+				if m.cursor.x < expense_credit {
+					m.cursor.x++
+				} else {
+					if m.cursor.y < max_entries-1 {
+						m.cursor.y++
+						m.cursor.x = 0
+					} else {
+						m.active_view = insert_confirm_view
+					}
+				}
 			}
 
 		case "tab":
-			if m.cursor.x < expense_credit {
-				m.cursor.x++
+			if m.active_view == insert_table_view {
+				if m.cursor.x < expense_credit {
+					m.cursor.x++
+				} else {
+					if m.cursor.y < max_entries-1 {
+						m.cursor.y++
+						m.cursor.x = 0
+					} else {
+						m.active_view = insert_confirm_view
+					}
+				}
 			} else {
-				m.cursor.x = 0
-				m.cursor.y++
+				m.active_view = insert_table_view
 			}
 
 		case "shift+tab":
-			if m.cursor.x > 0 {
-				m.cursor.x--
+			if m.active_view == insert_table_view {
+				if m.cursor.x > 0 {
+					m.cursor.x--
+				} else {
+					m.cursor.x = expense_credit
+					m.cursor.y--
+				}
 			} else {
-				m.cursor.x = expense_credit
-				m.cursor.y--
+				m.active_view = insert_table_view
 			}
 
 		case "backspace":
@@ -108,17 +147,29 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			entry := &m.entries[m.cursor.y]
 			switch m.cursor.x {
 			case expense_year:
-				entry.Year += msg.String()
+				if len(entry.Year) < DateWidth {
+					entry.Year += msg.String()
+				}
 			case expense_month:
-				entry.Month += msg.String()
+				if len(entry.Month) < DateWidth {
+					entry.Month += msg.String()
+				}
 			case expense_day:
-				entry.Day += msg.String()
+				if len(entry.Day) < DateWidth {
+					entry.Day += msg.String()
+				}
 			case expense_description:
-				entry.Description += msg.String()
+				if len(entry.Description) < DescriptionWidth {
+					entry.Description += msg.String()
+				}
 			case expense_debit:
-				entry.Debit += msg.String()
+				if len(entry.Debit) < DefaultWidth {
+					entry.Debit += msg.String()
+				}
 			case expense_credit:
-				entry.Credit += msg.String()
+				if len(entry.Credit) < DefaultWidth {
+					entry.Credit += msg.String()
+				}
 			}
 
 		}
@@ -140,15 +191,21 @@ func removeLastChar(s string) string {
 
 func (m manualInsertModel) View() string {
 	s := ""
-	s = renderHeader(s)
+	s = renderHeader(m, s)
 	s = renderEntries(m, s)
+	s = renderInsertAction(m, s)
 
 	// Send the UI for rendering
 	return s
 }
 
-func renderHeader(s string) string {
-	s += "\n" + textStyle.Render("Please fill in entries to insert into database")
+func renderHeader(m manualInsertModel, s string) string {
+	sym := " "
+	if m.active_view == insert_table_view {
+		sym = "[x]"
+	}
+	s += "\n" + textStyle.PaddingRight(1).Render("Please fill in entries to insert into database")
+	s += activeViewStyle(m.active_view, insert_table_view).Width(3).Render(sym)
 	s += "\n"
 	s += textStyle.Width(DateWidth).Render("Year")
 	s += " | "
@@ -189,6 +246,19 @@ func renderEntries(m manualInsertModel, s string) string {
 		line += styleIfCursorIsHere(m, expense_credit, row).Width(DefaultWidth).Render(entry.Credit)
 		s += line + "\n"
 	}
+
+	return s
+}
+
+func renderInsertAction(m manualInsertModel, s string) string {
+
+	s += "\n" + textStyle.PaddingRight(2).Render("Insert selected entries?")
+
+	sym := ""
+	if m.active_view == insert_confirm_view {
+		sym = "Press enter to delete selected entries [x]"
+	}
+	s += activeViewStyle(m.active_view, insert_confirm_view).Render(sym)
 
 	return s
 }
