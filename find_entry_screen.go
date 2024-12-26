@@ -277,7 +277,7 @@ func renderSearchBox(m findEntryScreenModel, s string) string {
 	}
 
 	s += textStyle.PaddingRight(1).Render("Enter in details of entry to search for. Leave blank to search all.") +
-		activeViewStyle(m, search_view).Width(3).Render(sym) + "\n"
+		activeViewStyle(m.active_view, search_view).Width(3).Render(sym) + "\n"
 	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Year: ") +
 		selectStyle(m, expense_year).Width(FindEntryScreenWidth).Render(m.fields[expense_year]) + "\n"
 	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Month: ") +
@@ -311,7 +311,7 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 
 		s += textStyle.Width(DescriptionWidth + 3).Render(page_str)
 		s += textStyle.Width((DefaultWidth + 3) * 2).Render("Press < or > to switch pages")
-		s += activeViewStyle(m, entries_view).Width(3).Render(sym)
+		s += activeViewStyle(m.active_view, entries_view).Width(3).Render(sym)
 		// s += textStyle.Width(DefaultWidth).Render("Cursor " + strconv.Itoa(m.entries_cursor))
 	}
 
@@ -386,14 +386,14 @@ func renderActions(m findEntryScreenModel, s string) string {
 		if m.active_view == action_view {
 			sym = "Press enter to delete selected entries [x]"
 		}
-		s += activeViewStyle(m, action_view).Render(sym)
+		s += activeViewStyle(m.active_view, action_view).Render(sym)
 	}
 
 	return s
 }
 
-func activeViewStyle(m findEntryScreenModel, view int) lipgloss.Style {
-	if view == m.active_view {
+func activeViewStyle(active_view int, view int) lipgloss.Style {
+	if view == active_view {
 		return selectedStyle
 	}
 
