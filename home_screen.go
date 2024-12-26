@@ -67,6 +67,7 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return createInsertCSVScreenModel(), nil
 			case deleteCsvData:
 			case insertEntry:
+				return createManualInsertScreenModel(), nil
 			case deleteEntry:
 			case findEntry:
 				return createFindEntryScreenModel(), nil
