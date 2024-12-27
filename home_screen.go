@@ -67,9 +67,15 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case insertEntry:
 				return createManualInsertScreenModel(), nil
 			case updateEntry:
-
+				return createFindEntryModel(action{
+					action_text: "edit",
+					next_model:  nil,
+				}), nil
 			case deleteEntry:
-				return createDeleteEntryScreenModel(), nil
+				return createFindEntryModel(action{
+					action_text: "delete",
+					next_model:  nil,
+				}), nil
 			}
 
 			_, ok := m.selected[m.cursor]

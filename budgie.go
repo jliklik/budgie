@@ -13,6 +13,9 @@ const MongoUri = "mongodb://127.0.0.1:27017" // running this on localhost
 
 // other constants
 const default_feedback = "Press Ctrl+C to go back to home screen."
+const num_expense_search_fields = expense_credit + 1
+const invalid = -99
+const num_entries_per_page = 10
 
 func main() {
 

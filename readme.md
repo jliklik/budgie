@@ -22,3 +22,8 @@ use budgie
 db.expenses.find
 
 Deleting from db: `db.expenses.deleteMany({})`
+
+
+Both update entry and delete entry screen should have same architecture:
+Find Entry -> Display found entries (option to edit entries) -> Action Screen
+- use submodels?
