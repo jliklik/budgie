@@ -30,6 +30,7 @@ type manualInsertModel struct {
 	cursor      cursor2D
 	valid       [max_entries][expense_credit + 1]int
 	entries     []expensePlaceholder
+	prompt_text string
 }
 
 type expensePlaceholder struct {
@@ -49,7 +50,8 @@ func createManualInsertScreenModel() manualInsertModel {
 			x: 0,
 			y: 0,
 		},
-		entries: make([]expensePlaceholder, max_entries),
+		entries:     make([]expensePlaceholder, max_entries),
+		prompt_text: default_feedback,
 	}
 }
 
@@ -65,8 +67,8 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 
-		case "ctrl+c", "q":
-			return m, tea.Quit
+		case "ctrl+c":
+			return createHomeScreenModel(), nil
 
 		case "up":
 			if m.active_view == insert_confirm_view {
@@ -166,12 +168,16 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
+				if len(filtered) == 0 {
+					any_entry_invalid = true
+				}
 
 				if !any_entry_invalid {
 					mongoInsertEntries(filtered)
 					insertingCsvScreenModel := createPostInsertCSVScreenModel(filtered)
 					return insertingCsvScreenModel, nil
 				} else {
+					m.prompt_text = "Some errors were detected (highlighted). Please fix and re-enter."
 					m.active_view = insert_table_view
 				}
 
@@ -229,6 +235,7 @@ func (m manualInsertModel) View() string {
 	s := ""
 	s = renderHeader(m, s)
 	s = renderEntries(m, s)
+	s += textStyle.Render(m.prompt_text) + "\n"
 	s = renderInsertAction(m, s)
 
 	// Send the UI for rendering
@@ -386,7 +393,7 @@ func insertManualEntriesIntoMongo(m *manualInsertModel) []Expense {
 						m.valid[row][col] = error_style
 					}
 				} else {
-					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Credit != "" {
+					if (m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "") && m.entries[row].Credit == "" {
 						m.valid[row][col] = error_style
 					} else {
 						m.valid[row][col] = inactive_style
@@ -402,10 +409,10 @@ func insertManualEntriesIntoMongo(m *manualInsertModel) []Expense {
 						m.valid[row][col] = error_style
 					}
 				} else {
-					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" {
+					if (m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "") && m.entries[row].Debit == "" {
 						m.valid[row][col] = error_style
 					} else {
-						m.valid[row][col] = selected_style // inactive_style
+						m.valid[row][col] = inactive_style
 					}
 				}
 			}

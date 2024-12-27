@@ -72,7 +72,7 @@ func (m insertCSVScreenModel) View() string {
 	s := selectedStyle.Width(HomeScreenWidth).Render("> Insert csv data") + "\n"
 	s += textStyle.Width(InsertScreenWidth).PaddingLeft(2).Render("Enter filename:")
 	s += errorStyle.PaddingLeft(2).PaddingRight(2).Render(m.filename)
-	s += "\n\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press Ctrl+C to go back.") + "\n"
+	s += "\n\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press Ctrl+C to go back to home screen.") + "\n"
 	return s
 }
 
