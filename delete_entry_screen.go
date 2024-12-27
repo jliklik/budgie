@@ -16,7 +16,7 @@ const (
 	delete_num_views    = iota
 )
 
-type findEntryScreenModel struct {
+type deleteEntryScreenModel struct {
 	fields                 [num_expense_search_fields]string
 	validated              [num_expense_search_fields]bool
 	feedback               string
@@ -29,14 +29,14 @@ type findEntryScreenModel struct {
 	entries_cursor         int
 }
 
-const FindEntryScreenWidth = 30
-const FindEntryScreenLabelWidth = 15
+const DeleteEntryScreenWidth = 30
+const DeleteEntryScreenLabelWidth = 15
 const num_expense_search_fields = expense_credit + 1
 const invalid = -99
 const num_entries_per_page = 10
 
-func createFindEntryScreenModel() findEntryScreenModel {
-	return findEntryScreenModel{
+func createDeleteEntryScreenModel() deleteEntryScreenModel {
+	return deleteEntryScreenModel{
 		entry_to_search: Expense{
 			Month:  invalid,
 			Day:    invalid,
@@ -52,11 +52,11 @@ func createFindEntryScreenModel() findEntryScreenModel {
 	}
 }
 
-func (m findEntryScreenModel) Init() tea.Cmd {
+func (m deleteEntryScreenModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m deleteEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.KeyMsg:
@@ -265,7 +265,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m findEntryScreenModel) View() string {
+func (m deleteEntryScreenModel) View() string {
 	s := ""
 	s = renderSearchBox(m, s)
 	s = renderExpenses(m, s)
@@ -273,7 +273,7 @@ func (m findEntryScreenModel) View() string {
 	return s
 }
 
-func renderSearchBox(m findEntryScreenModel, s string) string {
+func renderSearchBox(m deleteEntryScreenModel, s string) string {
 	sym := " "
 	if m.active_view == delete_search_view {
 		sym = "[x]"
@@ -281,24 +281,24 @@ func renderSearchBox(m findEntryScreenModel, s string) string {
 
 	s += textStyle.PaddingRight(1).Render("Enter in details of entry to search for. Leave blank to search all.") +
 		activeViewStyle(m.active_view, delete_search_view).Width(3).Render(sym) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Year: ") +
-		selectStyle(m, expense_year).Width(FindEntryScreenWidth).Render(m.fields[expense_year]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Month: ") +
-		selectStyle(m, expense_month).Width(FindEntryScreenWidth).Render(m.fields[expense_month]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Day: ") +
-		selectStyle(m, expense_day).Width(FindEntryScreenWidth).Render(m.fields[expense_day]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Description: ") +
-		selectStyle(m, expense_description).Width(FindEntryScreenWidth).Render(m.fields[expense_description]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Debit: ") +
-		selectStyle(m, expense_debit).Width(FindEntryScreenWidth).Render(m.fields[expense_debit]) + "\n"
-	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Credit: ") +
-		selectStyle(m, expense_credit).Width(FindEntryScreenWidth).Render(m.fields[expense_credit]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(DeleteEntryScreenLabelWidth).Render("Year: ") +
+		selectStyle(m, expense_year).Width(DeleteEntryScreenWidth).Render(m.fields[expense_year]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(DeleteEntryScreenLabelWidth).Render("Month: ") +
+		selectStyle(m, expense_month).Width(DeleteEntryScreenWidth).Render(m.fields[expense_month]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(DeleteEntryScreenLabelWidth).Render("Day: ") +
+		selectStyle(m, expense_day).Width(DeleteEntryScreenWidth).Render(m.fields[expense_day]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(DeleteEntryScreenLabelWidth).Render("Description: ") +
+		selectStyle(m, expense_description).Width(DeleteEntryScreenWidth).Render(m.fields[expense_description]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(DeleteEntryScreenLabelWidth).Render("Debit: ") +
+		selectStyle(m, expense_debit).Width(DeleteEntryScreenWidth).Render(m.fields[expense_debit]) + "\n"
+	s += textStyle.PaddingLeft(2).Width(DeleteEntryScreenLabelWidth).Render("Credit: ") +
+		selectStyle(m, expense_credit).Width(DeleteEntryScreenWidth).Render(m.fields[expense_credit]) + "\n"
 	s += textStyle.Render(m.feedback) + "\n"
 
 	return s
 }
 
-func renderExpenses(m findEntryScreenModel, s string) string {
+func renderExpenses(m deleteEntryScreenModel, s string) string {
 	sym := " "
 	if m.active_view == delete_entries_view {
 		sym = "[x]"
@@ -370,7 +370,7 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 	return s
 }
 
-func numSelected(m findEntryScreenModel) int {
+func numSelected(m deleteEntryScreenModel) int {
 	num_selected := 0
 	for _, selected := range m.selected_entries {
 		if selected {
@@ -380,7 +380,7 @@ func numSelected(m findEntryScreenModel) int {
 	return num_selected
 }
 
-func renderActions(m findEntryScreenModel, s string) string {
+func renderActions(m deleteEntryScreenModel, s string) string {
 
 	if numSelected(m) > 0 {
 		s += "\n" + textStyle.PaddingRight(2).Render("Delete selected entries?")
@@ -403,7 +403,7 @@ func activeViewStyle(active_view int, view int) lipgloss.Style {
 	return textStyle
 }
 
-func selectEntryStyle(m findEntryScreenModel, index int) lipgloss.Style {
+func selectEntryStyle(m deleteEntryScreenModel, index int) lipgloss.Style {
 	if m.entries_cursor == index {
 		return selectedStyle
 	} else {
@@ -411,7 +411,7 @@ func selectEntryStyle(m findEntryScreenModel, index int) lipgloss.Style {
 	}
 }
 
-func selectStyle(m findEntryScreenModel, index int) lipgloss.Style {
+func selectStyle(m deleteEntryScreenModel, index int) lipgloss.Style {
 	if m.search_cursor == index {
 		return selectedStyle.PaddingLeft(2).PaddingRight(2)
 	} else if !m.validated[index] {
@@ -421,7 +421,7 @@ func selectStyle(m findEntryScreenModel, index int) lipgloss.Style {
 	}
 }
 
-func allValid(m findEntryScreenModel) bool {
+func allValid(m deleteEntryScreenModel) bool {
 	for _, value := range m.validated {
 		if !value {
 			return false
