@@ -1,24 +1,19 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (
-	search_view  = iota
-	entries_view = iota
-	action_view  = iota
-	num_views    = iota
+	delete_search_view  = iota
+	delete_entries_view = iota
+	delete_action_view  = iota
+	delete_num_views    = iota
 )
 
 type findEntryScreenModel struct {
@@ -39,7 +34,6 @@ const FindEntryScreenLabelWidth = 15
 const num_expense_search_fields = expense_credit + 1
 const invalid = -99
 const num_entries_per_page = 10
-const default_feedback = "Press Ctrl+C to go back to home screen."
 
 func createFindEntryScreenModel() findEntryScreenModel {
 	return findEntryScreenModel{
@@ -54,7 +48,7 @@ func createFindEntryScreenModel() findEntryScreenModel {
 		found_entries:    nil,
 		selected_entries: nil,
 		feedback:         default_feedback,
-		active_view:      search_view,
+		active_view:      delete_search_view,
 	}
 }
 
@@ -70,27 +64,27 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 
 		case "up":
-			if m.active_view == search_view {
+			if m.active_view == delete_search_view {
 				if m.search_cursor > expense_year {
 					m.search_cursor--
 				}
-			} else if m.active_view == entries_view {
+			} else if m.active_view == delete_entries_view {
 				if m.entries_cursor > 0 {
 					m.entries_cursor--
 				} else {
-					m.active_view = search_view
+					m.active_view = delete_search_view
 				}
 			}
 		case "down":
-			if m.active_view == search_view {
+			if m.active_view == delete_search_view {
 				if m.search_cursor < expense_credit {
 					m.search_cursor++
 				} else {
 					if len(m.found_entries) > 0 {
-						m.active_view = entries_view
+						m.active_view = delete_entries_view
 					}
 				}
-			} else if m.active_view == entries_view {
+			} else if m.active_view == delete_entries_view {
 				num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
 				if m.entries_cursor < num_entries_on_page-1 {
 					m.entries_cursor++
@@ -113,16 +107,16 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.fields[m.search_cursor] = m.fields[m.search_cursor][:sz-1]
 			}
 		case "tab":
-			m.active_view = (m.active_view + 1) % num_views
-			if m.active_view == action_view && numSelected(m) == 0 {
-				m.active_view = search_view // fast forward back to search view if no entries selected
+			m.active_view = (m.active_view + 1) % delete_num_views
+			if m.active_view == delete_action_view && numSelected(m) == 0 {
+				m.active_view = delete_search_view // fast forward back to search view if no entries selected
 			}
-			if m.active_view == entries_view && len(m.found_entries) == 0 {
-				m.active_view = search_view // fast forward back to search view if no entries selected
+			if m.active_view == delete_entries_view && len(m.found_entries) == 0 {
+				m.active_view = delete_search_view // fast forward back to search view if no entries selected
 			}
 		case "x":
 			// does same thing as enter for entries view
-			if m.active_view == entries_view {
+			if m.active_view == delete_entries_view {
 				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
 					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
 				} else {
@@ -130,7 +124,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "enter":
-			if m.active_view == search_view {
+			if m.active_view == delete_search_view {
 				switch m.search_cursor {
 				case expense_year:
 					if m.fields[m.search_cursor] != "" {
@@ -239,7 +233,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.found_entries = mongoFindMatchingEntries(m.entry_to_search)
 					m.selected_entries = make([]bool, len(m.found_entries))
 				}
-			} else if m.active_view == entries_view {
+			} else if m.active_view == delete_entries_view {
 				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
 					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
 				} else {
@@ -257,7 +251,7 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.found_entries = mongoFindMatchingEntries(m.entry_to_search)
 				m.selected_entries = make([]bool, len(m.found_entries))
 				// change active view back to search view
-				m.active_view = search_view
+				m.active_view = delete_search_view
 				// reset cursor
 				m.entries_cursor = 0
 			}
@@ -281,12 +275,12 @@ func (m findEntryScreenModel) View() string {
 
 func renderSearchBox(m findEntryScreenModel, s string) string {
 	sym := " "
-	if m.active_view == search_view {
+	if m.active_view == delete_search_view {
 		sym = "[x]"
 	}
 
 	s += textStyle.PaddingRight(1).Render("Enter in details of entry to search for. Leave blank to search all.") +
-		activeViewStyle(m.active_view, search_view).Width(3).Render(sym) + "\n"
+		activeViewStyle(m.active_view, delete_search_view).Width(3).Render(sym) + "\n"
 	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Year: ") +
 		selectStyle(m, expense_year).Width(FindEntryScreenWidth).Render(m.fields[expense_year]) + "\n"
 	s += textStyle.PaddingLeft(2).Width(FindEntryScreenLabelWidth).Render("Month: ") +
@@ -306,7 +300,7 @@ func renderSearchBox(m findEntryScreenModel, s string) string {
 
 func renderExpenses(m findEntryScreenModel, s string) string {
 	sym := " "
-	if m.active_view == entries_view {
+	if m.active_view == delete_entries_view {
 		sym = "[x]"
 	}
 
@@ -320,7 +314,7 @@ func renderExpenses(m findEntryScreenModel, s string) string {
 
 		s += textStyle.Width(DescriptionWidth + 3).Render(page_str)
 		s += textStyle.Width((DefaultWidth + 3) * 2).Render("Press < or > to switch pages")
-		s += activeViewStyle(m.active_view, entries_view).Width(3).Render(sym)
+		s += activeViewStyle(m.active_view, delete_entries_view).Width(3).Render(sym)
 		// s += textStyle.Width(DefaultWidth).Render("Cursor " + strconv.Itoa(m.entries_cursor))
 	}
 
@@ -392,10 +386,10 @@ func renderActions(m findEntryScreenModel, s string) string {
 		s += "\n" + textStyle.PaddingRight(2).Render("Delete selected entries?")
 
 		sym := ""
-		if m.active_view == action_view {
+		if m.active_view == delete_action_view {
 			sym = "Press enter to delete selected entries [x]"
 		}
-		s += activeViewStyle(m.active_view, action_view).Render(sym)
+		s += activeViewStyle(m.active_view, delete_action_view).Render(sym)
 	}
 
 	return s
@@ -434,96 +428,4 @@ func allValid(m findEntryScreenModel) bool {
 		}
 	}
 	return true
-}
-
-func mongoDeleteEntries(entries []Expense) {
-	for _, entry := range entries {
-		mongoDeleteEntry(entry)
-	}
-}
-
-func mongoDeleteEntry(entry Expense) {
-
-	ctx := context.TODO()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		if err = client.Disconnect(ctx); err != nil {
-			panic(err)
-		}
-	}()
-
-	coll := client.Database(MongoDb).Collection(MongoCollection)
-
-	filter := bson.M{"_id": entry.ID}
-
-	// Delete the document
-	_, err = coll.DeleteOne(ctx, filter)
-	if err != nil {
-		log.Fatalf("Error deleting document: %v", err)
-	}
-}
-
-func mongoFindMatchingEntries(entry Expense) []Expense {
-	filters := bson.A{}
-
-	if entry.Year != invalid {
-		filters = append(filters, bson.M{"year": entry.Year}) //bson.M stands for Map type
-	}
-	if entry.Month != invalid {
-		filters = append(filters, bson.M{"month": entry.Month})
-	}
-	if entry.Day != invalid {
-		filters = append(filters, bson.M{"day": entry.Day})
-	}
-	if entry.Description != "" {
-		filters = append(filters, bson.M{
-			"description": bson.M{
-				"$regex":   ".*" + entry.Description + ".*", // Matches any string containing entry description
-				"$options": "i",                             // Case-insensitive search
-			}})
-	}
-	if entry.Debit != invalid {
-		filters = append(filters, bson.M{"debit": entry.Debit})
-	}
-	if entry.Credit != invalid {
-		filters = append(filters, bson.M{"credit": entry.Credit})
-	}
-
-	filter := bson.D{} // bson.D is a list
-	if len(filters) > 0 {
-		filter = bson.D{{"$and", filters}}
-	}
-
-	ctx := context.TODO()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		if err = client.Disconnect(ctx); err != nil {
-			panic(err)
-		}
-	}()
-
-	coll := client.Database(MongoDb).Collection(MongoCollection)
-
-	search_cursor, err := coll.Find(ctx, filter)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer search_cursor.Close(ctx)
-
-	var expenses []Expense
-	if err = search_cursor.All(ctx, &expenses); err != nil {
-		panic(err)
-	}
-
-	return expenses
 }

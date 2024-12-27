@@ -36,3 +36,19 @@ const (
 	csv_credit_col      = iota
 	csv_total_col       = iota
 )
+
+func check_if_entry_is_valid(entry *Expense) {
+	if entry.Month == 0 {
+		return
+	} else if entry.Day == 0 {
+		return
+	} else if entry.Year == 0 {
+		return
+	} else if entry.Description == "" {
+		return
+	} else if entry.Debit == 0 && entry.Credit == 0 {
+		return
+	}
+
+	entry.Valid = true
+}
