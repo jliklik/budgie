@@ -7,7 +7,6 @@ import (
 )
 
 type postInsertCSVScreenModel struct {
-	filename string
 	expenses []Expense
 }
 
@@ -16,9 +15,8 @@ const DefaultWidth = 15
 const DescriptionWidth = 36
 const LegendWidth = 50
 
-func createPostInsertCSVScreenModel(filename string, expenses []Expense) postInsertCSVScreenModel {
+func createPostInsertCSVScreenModel(expenses []Expense) postInsertCSVScreenModel {
 	return postInsertCSVScreenModel{
-		filename: filename,
 		expenses: expenses,
 	}
 }

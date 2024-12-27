@@ -1,6 +1,9 @@
 package main
 
 import (
+	"strconv"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -29,6 +32,7 @@ type expensePlaceholder struct {
 	Description string
 	Debit       string
 	Credit      string
+	Valid       bool
 }
 
 const max_entries = 10
@@ -141,6 +145,15 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				entry.Debit = removeLastChar(entry.Debit)
 			case expense_credit:
 				entry.Credit = removeLastChar(entry.Credit)
+			}
+
+		case "enter":
+			if m.active_view == insert_confirm_view {
+				expenses_inserted := insertManualEntriesIntoMongo(m)
+				insertingCsvScreenModel := createPostInsertCSVScreenModel(expenses_inserted)
+				return insertingCsvScreenModel, nil
+			} else {
+				m.active_view = insert_confirm_view
 			}
 
 		default:
@@ -261,4 +274,60 @@ func renderInsertAction(m manualInsertModel, s string) string {
 	s += activeViewStyle(m.active_view, insert_confirm_view).Render(sym)
 
 	return s
+}
+
+func insertManualEntriesIntoMongo(m manualInsertModel) []Expense {
+	entries := []Expense{}
+
+	for row := range max_entries {
+
+		entry := Expense{}
+
+		for col := range expense_credit {
+			switch col {
+			case expense_year:
+				year, err := strconv.Atoi(m.entries[row].Year)
+				if err == nil {
+					entry.Year = year
+				}
+			case expense_month:
+				month, err := time.Parse("Jan", m.entries[row].Month)
+				if err == nil {
+					entry.Month = int(month.Month())
+				} else {
+					// try parsing number
+					month, err := strconv.Atoi(m.entries[row].Month)
+					if err == nil && month >= 1 && month <= 12 {
+						entry.Month = month
+					}
+				}
+			case expense_day:
+				day, err := strconv.Atoi(m.entries[row].Day)
+				if err == nil && day >= 1 && day <= 31 {
+					entry.Day = day
+				}
+			case expense_description:
+				entry.Description = m.entries[row].Description
+			case expense_debit:
+				val, err := strconv.ParseFloat(m.entries[row].Debit, 64)
+				if err == nil {
+					entry.Debit = val
+				}
+			case expense_credit:
+				val, err := strconv.ParseFloat(m.entries[row].Credit, 64)
+				if err == nil {
+					entry.Credit = val
+				}
+			}
+		}
+
+		// Check if entry is valid
+		check_if_entry_is_valid(&entry)
+
+		entries = append(entries, entry)
+	}
+
+	mongoInsertEntries(entries)
+
+	return entries
 }

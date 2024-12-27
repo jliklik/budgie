@@ -88,7 +88,7 @@ func (m insertCSVScreenModel) enterCSV() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	expenses_inserted := insertCSVIntoMongo(reader)
-	insertingCsvScreenModel := createPostInsertCSVScreenModel(m.filename, expenses_inserted)
+	insertingCsvScreenModel := createPostInsertCSVScreenModel(expenses_inserted)
 	return insertingCsvScreenModel, nil
 }
 
@@ -166,6 +166,13 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 
 	// context.TODO() creates an empty context
 	// options.Client().ApplyURI() is part of mongo-driver/mongo/options package
+
+	mongoInsertEntries(entries)
+
+	return entries
+}
+
+func mongoInsertEntries(entries []Expense) {
 	ctx := context.TODO()
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
@@ -186,8 +193,6 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 			coll.InsertOne(ctx, entry)
 		}
 	}
-
-	return entries
 }
 
 func check_if_entry_is_valid(entry *Expense) {
