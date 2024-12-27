@@ -16,15 +16,14 @@ const HomeScreenWidth = 30
 
 const (
 	insertCsvData = iota
-	deleteCsvData = iota
 	insertEntry   = iota
-	deleteEntry   = iota
+	deleteCsvData = iota
 	findEntry     = iota
 )
 
 func createHomeScreenModel() homeScreenModel {
 	return homeScreenModel{
-		choices:  []string{"Insert csv data", "Delete csv data", "Insert entry", "Delete entry", "Find entry"},
+		choices:  []string{"Insert csv data", "Insert manual entry", "Delete csv data", "Find and delete entry"},
 		selected: make(map[int]struct{}), // map of int to struct
 	}
 }
@@ -65,10 +64,10 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.cursor {
 			case insertCsvData:
 				return createInsertCSVScreenModel(), nil
-			case deleteCsvData:
 			case insertEntry:
 				return createManualInsertScreenModel(), nil
-			case deleteEntry:
+			case deleteCsvData:
+
 			case findEntry:
 				return createFindEntryScreenModel(), nil
 			}

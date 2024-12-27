@@ -159,8 +159,17 @@ func (m findEntryScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.search_cursor++
 							m.feedback = default_feedback
 						} else {
-							m.validated[m.search_cursor] = false
-							m.feedback = "Invalid month! Format: Jan, Feb, Mar, etc."
+							// try parsing number
+							month, err := strconv.Atoi(m.fields[m.search_cursor])
+							if err == nil && month >= 1 && month <= 12 {
+								m.entry_to_search.Month = month
+								m.validated[m.search_cursor] = true
+								m.search_cursor++
+								m.feedback = default_feedback
+							} else {
+								m.validated[m.search_cursor] = false
+								m.feedback = "Invalid month! Format: Jan, Feb, Mar, etc."
+							}
 						}
 					} else {
 						m.entry_to_search.Month = invalid

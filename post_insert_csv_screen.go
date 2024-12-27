@@ -7,7 +7,6 @@ import (
 )
 
 type postInsertCSVScreenModel struct {
-	filename string
 	expenses []Expense
 }
 
@@ -16,9 +15,8 @@ const DefaultWidth = 15
 const DescriptionWidth = 36
 const LegendWidth = 50
 
-func createPostInsertCSVScreenModel(filename string, expenses []Expense) postInsertCSVScreenModel {
+func createPostInsertCSVScreenModel(expenses []Expense) postInsertCSVScreenModel {
 	return postInsertCSVScreenModel{
-		filename: filename,
 		expenses: expenses,
 	}
 }
@@ -47,7 +45,7 @@ func (m postInsertCSVScreenModel) View() string {
 	s := ""
 	s += displayLegend(s)
 	s += displayExpenses(m.expenses)
-	s += "\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press Ctrl+C to go back.") + "\n"
+	s += "\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press Ctrl+C to go back to home screen.") + "\n"
 	return s
 }
 

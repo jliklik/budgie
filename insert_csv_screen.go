@@ -72,7 +72,7 @@ func (m insertCSVScreenModel) View() string {
 	s := selectedStyle.Width(HomeScreenWidth).Render("> Insert csv data") + "\n"
 	s += textStyle.Width(InsertScreenWidth).PaddingLeft(2).Render("Enter filename:")
 	s += errorStyle.PaddingLeft(2).PaddingRight(2).Render(m.filename)
-	s += "\n\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press Ctrl+C to go back.") + "\n"
+	s += "\n\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press Ctrl+C to go back to home screen.") + "\n"
 	return s
 }
 
@@ -88,7 +88,7 @@ func (m insertCSVScreenModel) enterCSV() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	expenses_inserted := insertCSVIntoMongo(reader)
-	insertingCsvScreenModel := createPostInsertCSVScreenModel(m.filename, expenses_inserted)
+	insertingCsvScreenModel := createPostInsertCSVScreenModel(expenses_inserted)
 	return insertingCsvScreenModel, nil
 }
 
@@ -166,6 +166,13 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 
 	// context.TODO() creates an empty context
 	// options.Client().ApplyURI() is part of mongo-driver/mongo/options package
+
+	mongoInsertEntries(entries)
+
+	return entries
+}
+
+func mongoInsertEntries(entries []Expense) {
 	ctx := context.TODO()
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
@@ -186,8 +193,6 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 			coll.InsertOne(ctx, entry)
 		}
 	}
-
-	return entries
 }
 
 func check_if_entry_is_valid(entry *Expense) {
