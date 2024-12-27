@@ -155,7 +155,26 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			if m.active_view == insert_confirm_view {
-				return insertManualEntriesIntoMongo(m)
+				filtered := insertManualEntriesIntoMongo(&m)
+
+				any_entry_invalid := false
+				for y := 0; y < max_entries; y++ {
+					for x := 0; x < expense_credit; x++ {
+						if (m.valid[y][x]) == error_style {
+							any_entry_invalid = true
+							break
+						}
+					}
+				}
+
+				if !any_entry_invalid {
+					mongoInsertEntries(filtered)
+					insertingCsvScreenModel := createPostInsertCSVScreenModel(filtered)
+					return insertingCsvScreenModel, nil
+				} else {
+					m.active_view = insert_table_view
+				}
+
 			} else {
 				m.active_view = insert_confirm_view
 			}
@@ -234,7 +253,7 @@ func renderHeader(m manualInsertModel, s string) string {
 	s += " | "
 	s += textStyle.Width(DefaultWidth).Render("Debit")
 	s += " | "
-	s += textStyle.Width(DefaultWidth).Render("Credit") + strconv.Itoa(m.cursor.x)
+	s += textStyle.Width(DefaultWidth).Render("Credit") + strconv.Itoa(m.cursor.x) + strconv.Itoa(m.valid[m.cursor.y][m.cursor.x])
 
 	return s
 }
@@ -282,10 +301,10 @@ func renderInsertAction(m manualInsertModel, s string) string {
 	return s
 }
 
-func insertManualEntriesIntoMongo(m manualInsertModel) (tea.Model, tea.Cmd) {
+func insertManualEntriesIntoMongo(m *manualInsertModel) []Expense {
 	entries := []Expense{}
 
-	for row := range max_entries {
+	for row := 0; row < max_entries; row++ {
 
 		entry := Expense{}
 
@@ -301,7 +320,11 @@ func insertManualEntriesIntoMongo(m manualInsertModel) (tea.Model, tea.Cmd) {
 						m.valid[row][col] = error_style
 					}
 				} else {
-					m.valid[row][col] = inactive_style
+					if m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
+						m.valid[row][col] = error_style
+					} else {
+						m.valid[row][col] = inactive_style
+					}
 				}
 			case expense_month:
 				if m.entries[row].Month != "" {
@@ -320,7 +343,11 @@ func insertManualEntriesIntoMongo(m manualInsertModel) (tea.Model, tea.Cmd) {
 						}
 					}
 				} else {
-					m.valid[row][col] = inactive_style
+					if m.entries[row].Year != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
+						m.valid[row][col] = error_style
+					} else {
+						m.valid[row][col] = inactive_style
+					}
 				}
 			case expense_day:
 				if m.entries[row].Day != "" {
@@ -332,14 +359,22 @@ func insertManualEntriesIntoMongo(m manualInsertModel) (tea.Model, tea.Cmd) {
 						m.valid[row][col] = error_style
 					}
 				} else {
-					m.valid[row][col] = inactive_style
+					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
+						m.valid[row][col] = error_style
+					} else {
+						m.valid[row][col] = inactive_style
+					}
 				}
 			case expense_description:
-				if m.entries[row].Day != "" {
+				if m.entries[row].Description != "" {
 					entry.Description = m.entries[row].Description
 					m.valid[row][col] = selected_style
 				} else {
-					m.valid[row][col] = error_style
+					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
+						m.valid[row][col] = error_style
+					} else {
+						m.valid[row][col] = inactive_style
+					}
 				}
 			case expense_debit:
 				if m.entries[row].Debit != "" {
@@ -351,10 +386,14 @@ func insertManualEntriesIntoMongo(m manualInsertModel) (tea.Model, tea.Cmd) {
 						m.valid[row][col] = error_style
 					}
 				} else {
-					m.valid[row][col] = inactive_style
+					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Credit != "" {
+						m.valid[row][col] = error_style
+					} else {
+						m.valid[row][col] = inactive_style
+					}
 				}
 			case expense_credit:
-				if m.entries[row].Debit != "" {
+				if m.entries[row].Credit != "" {
 					val, err := strconv.ParseFloat(m.entries[row].Credit, 64)
 					if err == nil {
 						entry.Credit = val
@@ -363,7 +402,11 @@ func insertManualEntriesIntoMongo(m manualInsertModel) (tea.Model, tea.Cmd) {
 						m.valid[row][col] = error_style
 					}
 				} else {
-					m.valid[row][col] = inactive_style
+					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" {
+						m.valid[row][col] = error_style
+					} else {
+						m.valid[row][col] = selected_style // inactive_style
+					}
 				}
 			}
 		}
@@ -376,23 +419,7 @@ func insertManualEntriesIntoMongo(m manualInsertModel) (tea.Model, tea.Cmd) {
 
 	filtered := filter_empty_rows(entries)
 
-	any_entry_invalid := false
-	for y := range max_entries {
-		for x := range expense_credit {
-			if (m.valid[y][x]) == error_style {
-				any_entry_invalid = true
-				break
-			}
-		}
-	}
-
-	if !any_entry_invalid {
-		mongoInsertEntries(filtered)
-		insertingCsvScreenModel := createPostInsertCSVScreenModel(filtered)
-		return insertingCsvScreenModel, nil
-	}
-
-	return m, nil
+	return filtered
 }
 
 func filter_empty_rows(entries []Expense) []Expense {
