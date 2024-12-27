@@ -159,7 +159,7 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				any_entry_invalid := false
 				for y := 0; y < max_entries; y++ {
-					for x := 0; x < expense_credit; x++ {
+					for x := 0; x < (expense_credit + 1); x++ {
 						if (m.valid[y][x]) == error_style {
 							any_entry_invalid = true
 							break
@@ -253,7 +253,7 @@ func renderHeader(m manualInsertModel, s string) string {
 	s += " | "
 	s += textStyle.Width(DefaultWidth).Render("Debit")
 	s += " | "
-	s += textStyle.Width(DefaultWidth).Render("Credit") + strconv.Itoa(m.cursor.x) + strconv.Itoa(m.valid[m.cursor.y][m.cursor.x])
+	s += textStyle.Width(DefaultWidth).Render("Credit")
 
 	return s
 }
@@ -308,7 +308,7 @@ func insertManualEntriesIntoMongo(m *manualInsertModel) []Expense {
 
 		entry := Expense{}
 
-		for col := range expense_credit {
+		for col := 0; col < (expense_credit + 1); col++ {
 			switch col {
 			case expense_year:
 				if m.entries[row].Year != "" {
