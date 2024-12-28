@@ -21,6 +21,11 @@ type action struct {
 	next_model  tea.Model
 }
 
+type edit_table struct {
+	cursor cursor2D
+	valid  [max_entries][expense_credit + 2]int
+}
+
 type foundEntriesModel struct {
 	entry_to_search        Expense
 	active_view            int
@@ -30,6 +35,7 @@ type foundEntriesModel struct {
 	found_entries_page_idx int
 	entries_cursor         int
 	action                 action
+	edit_table             edit_table
 }
 
 func createFoundEntriesModel(found_entries []Expense, action action, entry_to_search Expense) foundEntriesModel {
@@ -68,15 +74,35 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "left":
-			if m.found_entries_page_idx > 0 {
-				m.found_entries_page_idx--
-				m.entries_cursor = 0
+			if m.action.action_text == "delete" {
+				if m.found_entries_page_idx > 0 {
+					m.found_entries_page_idx--
+					m.entries_cursor = 0
+				}
+			} else {
+				if m.edit_table.cursor.x > 0 {
+					m.edit_table.cursor.x--
+				} else {
+					m.edit_table.cursor.x = expense_credit
+					m.edit_table.cursor.y--
+				}
 			}
 		case "right":
-			num_pages := len(m.found_entries) / num_entries_per_page
-			if m.found_entries_page_idx < num_pages {
-				m.found_entries_page_idx++
-				m.entries_cursor = 0
+			if m.action.action_text == "delete" {
+				num_pages := len(m.found_entries) / num_entries_per_page
+				if m.found_entries_page_idx < num_pages {
+					m.found_entries_page_idx++
+					m.entries_cursor = 0
+				}
+			} else {
+				if m.edit_table.cursor.x < expense_credit+1 {
+					m.edit_table.cursor.x++
+				} else {
+					if m.edit_table.cursor.y < max_entries-1 {
+						m.edit_table.cursor.y++
+						m.edit_table.cursor.x = 0
+					}
+				}
 			}
 		case "backspace":
 			// TODO: enable editing of fields
@@ -92,28 +118,38 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "enter":
-			if m.active_view == found_entries_view {
-				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
+			if m.action.action_text == "delete" {
+				if m.active_view == found_entries_view {
+					if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
+						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
+					} else {
+						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
+					}
 				} else {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
+					selected_entries := make([]Expense, 0)
+					for idx, selected := range m.selected_entries {
+						if selected {
+							selected_entries = append(selected_entries, m.found_entries[idx])
+						}
+					}
+					if m.action.action_text == "delete" {
+						mongoDeleteEntries(selected_entries)
+					}
+
+					// reset page
+					m.found_entries = mongoFindMatchingEntries(m.entry_to_search)
+					m.selected_entries = make([]bool, len(m.found_entries))
+					m.active_view = found_entries_view
+					m.entries_cursor = 0
 				}
 			} else {
-				selected_entries := make([]Expense, 0)
-				for idx, selected := range m.selected_entries {
-					if selected {
-						selected_entries = append(selected_entries, m.found_entries[idx])
+				if m.edit_table.cursor.x == expense_credit+1 {
+					if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] {
+						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] = true
+					} else {
+						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] = false
 					}
 				}
-				if m.action.action_text == "delete" {
-					mongoDeleteEntries(selected_entries)
-				}
-
-				// reset page
-				m.found_entries = mongoFindMatchingEntries(m.entry_to_search)
-				m.selected_entries = make([]bool, len(m.found_entries))
-				m.active_view = found_entries_view
-				m.entries_cursor = 0
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
@@ -177,22 +213,23 @@ func renderExpenses(m foundEntriesModel, s string) string {
 		sliced_selected_entries = m.selected_entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
 	}
 
-	for i, entry := range sliced_entries {
-		line := selectEntryStyle(m, i).Width(DateWidth).Render(strconv.Itoa(entry.Year))
+	for row, entry := range sliced_entries {
+		line := selectEntryStyle(m, row, expense_year).Width(DateWidth).Render(strconv.Itoa(entry.Year))
 		line += " | "
-		line += selectEntryStyle(m, i).Width(DateWidth).Render(strconv.Itoa(entry.Month))
+		line += selectEntryStyle(m, row, expense_month).Width(DateWidth).Render(strconv.Itoa(entry.Month))
 		line += " | "
-		line += selectEntryStyle(m, i).Width(DateWidth).Render(strconv.Itoa(entry.Day))
+		line += selectEntryStyle(m, row, expense_day).Width(DateWidth).Render(strconv.Itoa(entry.Day))
 		line += " | "
-		line += selectEntryStyle(m, i).Width(DescriptionWidth).Render(entry.Description)
+		line += selectEntryStyle(m, row, expense_description).Width(DescriptionWidth).Render(entry.Description)
 		line += " | "
-		line += selectEntryStyle(m, i).Width(DefaultWidth).Render(strconv.FormatFloat(entry.Debit, 'f', 2, 64))
+		line += selectEntryStyle(m, row, expense_debit).Width(DefaultWidth).Render(strconv.FormatFloat(entry.Debit, 'f', 2, 64))
 		line += " | "
-		line += selectEntryStyle(m, i).Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
+		line += selectEntryStyle(m, row, expense_credit).Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
 		line += " | "
+
 		selected := " "
-		selected_entry_style := selectEntryStyle(m, i)
-		if len(sliced_selected_entries) > 0 && sliced_selected_entries[i] {
+		selected_entry_style := selectEntryStyle(m, row, expense_credit+1)
+		if len(sliced_selected_entries) > 0 && sliced_selected_entries[row] {
 			selected = "X"
 			selected_entry_style = selectedStyle
 		}
@@ -237,10 +274,28 @@ func activeViewStyle(active_view int, view int) lipgloss.Style {
 	return textStyle
 }
 
-func selectEntryStyle(m foundEntriesModel, index int) lipgloss.Style {
+func selectEntryStyle(m foundEntriesModel, row int, col int) lipgloss.Style {
+	if m.action.action_text == "delete" {
+		return selectDeleteEntryStyle(m, row)
+	} else {
+		return selectUpdateEntryStyle(m, row, col)
+	}
+}
+
+func selectDeleteEntryStyle(m foundEntriesModel, index int) lipgloss.Style {
 	if m.entries_cursor == index {
 		return selectedStyle
 	} else {
 		return inactiveStyle
 	}
+}
+
+func selectUpdateEntryStyle(m foundEntriesModel, y int, x int) lipgloss.Style {
+	if m.edit_table.cursor.x == x && m.edit_table.cursor.y == y {
+		return selectedStyle
+	} else if m.edit_table.valid[y][x] == error_style {
+		return errorStyle
+	}
+
+	return inactiveStyle
 }
