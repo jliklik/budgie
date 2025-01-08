@@ -31,6 +31,7 @@ type foundEntriesModel struct {
 	active_view            int
 	feedback               string
 	found_entries          []Expense
+	entries                []expensePlaceholder
 	selected_entries       []bool
 	found_entries_page_idx int
 	entries_cursor         int
@@ -39,7 +40,7 @@ type foundEntriesModel struct {
 }
 
 func createFoundEntriesModel(found_entries []Expense, action action, entry_to_search Expense) foundEntriesModel {
-	return foundEntriesModel{
+	model := foundEntriesModel{
 		entry_to_search:  entry_to_search,
 		found_entries:    found_entries,
 		selected_entries: make([]bool, len(found_entries)),
@@ -47,6 +48,26 @@ func createFoundEntriesModel(found_entries []Expense, action action, entry_to_se
 		active_view:      found_entries_view,
 		action:           action,
 	}
+
+	// TODO: populate entries with found_entries
+
+	return populate_entries(model)
+}
+
+func populate_entries(m foundEntriesModel) foundEntriesModel {
+
+	m.entries = make([]expensePlaceholder, len(m.found_entries))
+
+	for idx, entry := range m.found_entries {
+		m.entries[idx].Year = strconv.Itoa(entry.Year)
+		m.entries[idx].Month = strconv.Itoa(entry.Month)
+		m.entries[idx].Day = strconv.Itoa(entry.Day)
+		m.entries[idx].Description = entry.Description
+		m.entries[idx].Debit = strconv.FormatFloat(entry.Debit, 'f', 2, 64)
+		m.entries[idx].Credit = strconv.FormatFloat(entry.Credit, 'f', 2, 64)
+	}
+
+	return m
 }
 
 func (m foundEntriesModel) Init() tea.Cmd {
@@ -105,7 +126,23 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "backspace":
-			// TODO: enable editing of fields
+			if m.action.action_text == "edit" {
+				entry := &m.entries[m.edit_table.cursor.y]
+				switch m.edit_table.cursor.x {
+				case expense_year:
+					entry.Year = removeLastChar(entry.Year)
+				case expense_month:
+					entry.Month = removeLastChar(entry.Month)
+				case expense_day:
+					entry.Day = removeLastChar(entry.Day)
+				case expense_description:
+					entry.Description = removeLastChar(entry.Description)
+				case expense_debit:
+					entry.Debit = removeLastChar(entry.Debit)
+				case expense_credit:
+					entry.Credit = removeLastChar(entry.Credit)
+				}
+			}
 		case "tab":
 			m.active_view = (m.active_view + 1) % found_num_views
 		case "x":
@@ -139,8 +176,11 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// reset page
 					m.found_entries = mongoFindMatchingEntries(m.entry_to_search)
 					m.selected_entries = make([]bool, len(m.found_entries))
+
 					m.active_view = found_entries_view
 					m.entries_cursor = 0
+
+					m = populate_entries(m)
 				}
 			} else {
 				if m.edit_table.cursor.x == expense_credit+1 {
@@ -154,7 +194,35 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
 		default:
-			// TODO: allow editing of fields
+			if m.action.action_text == "edit" {
+				entry := &m.entries[m.edit_table.cursor.y]
+				switch m.edit_table.cursor.x {
+				case expense_year:
+					if len(entry.Year) < DateWidth {
+						entry.Year += msg.String()
+					}
+				case expense_month:
+					if len(entry.Month) < DateWidth {
+						entry.Month += msg.String()
+					}
+				case expense_day:
+					if len(entry.Day) < DateWidth {
+						entry.Day += msg.String()
+					}
+				case expense_description:
+					if len(entry.Description) < DescriptionWidth {
+						entry.Description += msg.String()
+					}
+				case expense_debit:
+					if len(entry.Debit) < DefaultWidth {
+						entry.Debit += msg.String()
+					}
+				case expense_credit:
+					if len(entry.Credit) < DefaultWidth {
+						entry.Credit += msg.String()
+					}
+				}
+			}
 		}
 	}
 
@@ -205,26 +273,26 @@ func renderExpenses(m foundEntriesModel, s string) string {
 	s += "\n"
 
 	// slice entries
-	sliced_entries := m.found_entries
+	sliced_entries := m.entries
 	sliced_selected_entries := m.selected_entries
 	if len(m.found_entries) > num_entries_per_page {
 		end_idx := min(len(m.found_entries), (m.found_entries_page_idx+1)*num_entries_per_page)
-		sliced_entries = m.found_entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
+		sliced_entries = m.entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
 		sliced_selected_entries = m.selected_entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
 	}
 
 	for row, entry := range sliced_entries {
-		line := selectEntryStyle(m, row, expense_year).Width(DateWidth).Render(strconv.Itoa(entry.Year))
+		line := selectEntryStyle(m, row, expense_year).Width(DateWidth).Render(entry.Year)
 		line += " | "
-		line += selectEntryStyle(m, row, expense_month).Width(DateWidth).Render(strconv.Itoa(entry.Month))
+		line += selectEntryStyle(m, row, expense_month).Width(DateWidth).Render(entry.Month)
 		line += " | "
-		line += selectEntryStyle(m, row, expense_day).Width(DateWidth).Render(strconv.Itoa(entry.Day))
+		line += selectEntryStyle(m, row, expense_day).Width(DateWidth).Render(entry.Day)
 		line += " | "
 		line += selectEntryStyle(m, row, expense_description).Width(DescriptionWidth).Render(entry.Description)
 		line += " | "
-		line += selectEntryStyle(m, row, expense_debit).Width(DefaultWidth).Render(strconv.FormatFloat(entry.Debit, 'f', 2, 64))
+		line += selectEntryStyle(m, row, expense_debit).Width(DefaultWidth).Render(entry.Debit)
 		line += " | "
-		line += selectEntryStyle(m, row, expense_credit).Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
+		line += selectEntryStyle(m, row, expense_credit).Width(DefaultWidth).Render(entry.Credit)
 		line += " | "
 
 		selected := " "
