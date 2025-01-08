@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -11,8 +10,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type insertCSVScreenModel struct {
@@ -170,43 +167,4 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 	mongoInsertEntries(entries)
 
 	return entries
-}
-
-func mongoInsertEntries(entries []Expense) {
-	ctx := context.TODO()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		if err = client.Disconnect(ctx); err != nil {
-			panic(err)
-		}
-	}()
-
-	coll := client.Database(MongoDb).Collection(MongoCollection)
-
-	for _, entry := range entries {
-		if entry.Valid {
-			coll.InsertOne(ctx, entry)
-		}
-	}
-}
-
-func check_if_entry_is_valid(entry *Expense) {
-	if entry.Month == 0 {
-		return
-	} else if entry.Day == 0 {
-		return
-	} else if entry.Year == 0 {
-		return
-	} else if entry.Description == "" {
-		return
-	} else if entry.Debit == 0 && entry.Credit == 0 {
-		return
-	}
-
-	entry.Valid = true
 }
