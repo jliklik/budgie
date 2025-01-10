@@ -45,7 +45,7 @@ const (
 	csv_total_col       = iota
 )
 
-func check_if_entry_is_valid(entry *Expense) {
+func checkIfEntryIsValid(entry *Expense) {
 	if entry.Month == 0 {
 		return
 	} else if entry.Day == 0 {
@@ -142,6 +142,46 @@ func mongoFindMatchingEntries(entry Expense) []Expense {
 	}
 
 	return expenses
+}
+
+func mongoUpdateEntries(old_entries []Expense, new_entries []Expense) {
+	for idx, entry := range old_entries {
+		mongoUpdateEntry(entry, new_entries[idx])
+	}
+}
+
+func mongoUpdateEntry(old_entry Expense, new_entry Expense) {
+
+	ctx := context.TODO()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	coll := client.Database(MongoDb).Collection(MongoCollection)
+
+	filter := bson.D{{"_id", old_entry.ID}}
+	update := bson.D{{"$set",
+		bson.D{
+			{"year", new_entry.Year},
+			{"month", new_entry.Month},
+			{"day", new_entry.Day},
+			{"description", new_entry.Description},
+			{"debit", new_entry.Debit},
+			{"credit", new_entry.Credit},
+		}}}
+
+	_, err = coll.UpdateOne(ctx, filter, update)
+	if err != nil {
+		log.Fatalf("Error deleting document: %v", err)
+	}
 }
 
 func mongoDeleteEntries(entries []Expense) {

@@ -25,3 +25,9 @@ var errorStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#FAFAFA")).
 	Background(lipgloss.Color("#f542c2")).
 	Align(lipgloss.Left)
+
+var questionStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("#FAFAFA")).
+	Background(lipgloss.Color("#ffbf00")).
+	Align(lipgloss.Left)
