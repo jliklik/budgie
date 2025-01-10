@@ -156,7 +156,7 @@ func insertCSVIntoMongo(reader *csv.Reader) []Expense {
 		}
 
 		// Check if entry is valid
-		check_if_entry_is_valid(&entry)
+		checkIfEntryIsValid(&entry)
 
 		entries = append(entries, entry)
 	}

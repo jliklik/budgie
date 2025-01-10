@@ -157,7 +157,7 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			if m.active_view == insert_confirm_view {
-				filtered := insertManualEntriesIntoMongo(&m)
+				filtered := checkIfManualEntriesValid(&m)
 
 				any_entry_invalid := false
 				for y := 0; y < max_entries; y++ {
@@ -308,7 +308,7 @@ func renderInsertAction(m manualInsertModel, s string) string {
 	return s
 }
 
-func insertManualEntriesIntoMongo(m *manualInsertModel) []Expense {
+func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
 	entries := []Expense{}
 
 	for row := 0; row < max_entries; row++ {
@@ -420,17 +420,17 @@ func insertManualEntriesIntoMongo(m *manualInsertModel) []Expense {
 		}
 
 		// Check if entry is valid
-		check_if_entry_is_valid(&entry)
+		checkIfEntryIsValid(&entry)
 
 		entries = append(entries, entry)
 	}
 
-	filtered := filter_empty_rows(entries)
+	filtered := filterEmptyRows(entries)
 
 	return filtered
 }
 
-func filter_empty_rows(entries []Expense) []Expense {
+func filterEmptyRows(entries []Expense) []Expense {
 
 	filtered := []Expense{}
 

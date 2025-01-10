@@ -1,9 +1,13 @@
+// This model is shared between delete and update views
+// probably not the best idea after all...
+
 package main
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -38,6 +42,7 @@ type foundEntriesModel struct {
 	entries_cursor         int
 	action                 action
 	edit_table             edit_table
+	prompt_text            string
 }
 
 func createFoundEntriesModel(found_entries []Expense, action action, entry_to_search Expense) foundEntriesModel {
@@ -48,14 +53,13 @@ func createFoundEntriesModel(found_entries []Expense, action action, entry_to_se
 		feedback:         default_feedback,
 		active_view:      found_entries_view,
 		action:           action,
+		prompt_text:      default_feedback,
 	}
 
-	// TODO: populate entries with found_entries
-
-	return populate_entries(model)
+	return populateEntries(model)
 }
 
-func populate_entries(m foundEntriesModel) foundEntriesModel {
+func populateEntries(m foundEntriesModel) foundEntriesModel {
 
 	m.entries = make([]expensePlaceholder, len(m.found_entries))
 
@@ -83,18 +87,36 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 
 		case "up":
-			if m.active_view == found_entries_view {
-				if m.entries_cursor > 0 {
-					m.entries_cursor--
+			if m.action.action_text == "delete" {
+				if m.active_view == found_entries_view {
+					if m.entries_cursor > 0 {
+						m.entries_cursor--
+					}
+				}
+			} else {
+				if m.active_view == found_entries_view {
+					if m.edit_table.cursor.y > 0 {
+						m.edit_table.cursor.y--
+					}
 				}
 			}
 		case "down":
-			if m.active_view == found_entries_view {
-				num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
-				if m.entries_cursor < num_entries_on_page-1 {
-					m.entries_cursor++
+			if m.action.action_text == "delete" {
+				if m.active_view == found_entries_view {
+					num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
+					if m.entries_cursor < num_entries_on_page-1 {
+						m.entries_cursor++
+					}
+				}
+			} else {
+				if m.active_view == found_entries_view {
+					num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
+					if m.edit_table.cursor.y < num_entries_on_page-1 {
+						m.edit_table.cursor.y++
+					}
 				}
 			}
+
 		case "left":
 			if m.action.action_text == "delete" {
 				if m.found_entries_page_idx > 0 {
@@ -144,7 +166,7 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					entry.Credit = removeLastChar(entry.Credit)
 				}
 
-				check_if_entry_modified(&m, m.edit_table.cursor.y)
+				checkIfEntryModified(&m, m.edit_table.cursor.y)
 			}
 		case "tab":
 			m.active_view = (m.active_view + 1) % found_num_views
@@ -183,7 +205,7 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.active_view = found_entries_view
 					m.entries_cursor = 0
 
-					m = populate_entries(m)
+					m = populateEntries(m)
 				}
 			} else { // edit view
 				if m.active_view == found_entries_view {
@@ -195,6 +217,22 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				} else {
+
+					// get entries being modified
+					entries_being_modified := rejectUnselectedRows(m.found_entries, m.selected_entries)
+
+					valid_edits := checkIfEditedEntriesValid(&m)
+					filtered_valid_edits := rejectUnselectedRows(valid_edits, m.selected_entries)
+					invalid := checkForInvalidEntries(&m) || len(filtered_valid_edits) == 0
+
+					if !invalid {
+						mongoUpdateEntries(entries_being_modified, filtered_valid_edits)
+						insertingCsvScreenModel := createPostInsertCSVScreenModel(filtered_valid_edits)
+						return insertingCsvScreenModel, nil
+					} else {
+						m.prompt_text = "Some errors were detected (highlighted). Please fix and re-enter."
+						m.active_view = insert_table_view
+					}
 
 				}
 			}
@@ -231,7 +269,7 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
-				check_if_entry_modified(&m, m.edit_table.cursor.y)
+				checkIfEntryModified(&m, m.edit_table.cursor.y)
 			}
 		}
 	}
@@ -239,7 +277,153 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func check_if_entry_modified(m *foundEntriesModel, row int) {
+func checkForInvalidEntries(m *foundEntriesModel) bool {
+	any_entry_invalid := false
+	for y := 0; y < len(m.found_entries); y++ {
+		for x := 0; x < (expense_credit + 1); x++ {
+			if (m.edit_table.valid[y][x]) == error_style && m.selected_entries[y] {
+				any_entry_invalid = true
+				break
+			}
+		}
+	}
+	return any_entry_invalid
+}
+
+func checkIfEditedEntriesValid(m *foundEntriesModel) []Expense {
+	entries := []Expense{}
+
+	for row := 0; row < len(m.found_entries); row++ {
+
+		entry := Expense{}
+
+		// see if fields are valid
+		for col := 0; col < (expense_credit + 1); col++ {
+			switch col {
+			case expense_year:
+				if m.entries[row].Year != "" {
+					year, err := strconv.Atoi(m.entries[row].Year)
+					if err == nil {
+						entry.Year = year
+						m.edit_table.valid[row][col] = selected_style
+					} else {
+						m.edit_table.valid[row][col] = error_style
+					}
+				} else {
+					if m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
+						m.edit_table.valid[row][col] = error_style
+					} else {
+						m.edit_table.valid[row][col] = inactive_style
+					}
+				}
+			case expense_month:
+				if m.entries[row].Month != "" {
+					month, err := time.Parse("Jan", m.entries[row].Month)
+					if err == nil {
+						entry.Month = int(month.Month())
+						m.edit_table.valid[row][col] = selected_style
+					} else {
+						// try parsing number
+						month, err := strconv.Atoi(m.entries[row].Month)
+						if err == nil && month >= 1 && month <= 12 {
+							entry.Month = month
+							m.edit_table.valid[row][col] = selected_style
+						} else {
+							m.edit_table.valid[row][col] = error_style
+						}
+					}
+				} else {
+					if m.entries[row].Year != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
+						m.edit_table.valid[row][col] = error_style
+					} else {
+						m.edit_table.valid[row][col] = inactive_style
+					}
+				}
+			case expense_day:
+				if m.entries[row].Day != "" {
+					day, err := strconv.Atoi(m.entries[row].Day)
+					if err == nil && day >= 1 && day <= 31 {
+						entry.Day = day
+						m.edit_table.valid[row][col] = selected_style
+					} else {
+						m.edit_table.valid[row][col] = error_style
+					}
+				} else {
+					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
+						m.edit_table.valid[row][col] = error_style
+					} else {
+						m.edit_table.valid[row][col] = inactive_style
+					}
+				}
+			case expense_description:
+				if m.entries[row].Description != "" {
+					entry.Description = m.entries[row].Description
+					m.edit_table.valid[row][col] = selected_style
+				} else {
+					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
+						m.edit_table.valid[row][col] = error_style
+					} else {
+						m.edit_table.valid[row][col] = inactive_style
+					}
+				}
+			case expense_debit:
+				if m.entries[row].Debit != "" {
+					val, err := strconv.ParseFloat(m.entries[row].Debit, 64)
+					if err == nil {
+						entry.Debit = val
+						m.edit_table.valid[row][col] = selected_style
+					} else {
+						m.edit_table.valid[row][col] = error_style
+					}
+				} else {
+					if (m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "") && m.entries[row].Credit == "" {
+						m.edit_table.valid[row][col] = error_style
+					} else {
+						m.edit_table.valid[row][col] = inactive_style
+					}
+				}
+			case expense_credit:
+				if m.entries[row].Credit != "" {
+					val, err := strconv.ParseFloat(m.entries[row].Credit, 64)
+					if err == nil {
+						entry.Credit = val
+						m.edit_table.valid[row][col] = selected_style
+					} else {
+						m.edit_table.valid[row][col] = error_style
+					}
+				} else {
+					if (m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "") && m.entries[row].Debit == "" {
+						m.edit_table.valid[row][col] = error_style
+					} else {
+						m.edit_table.valid[row][col] = inactive_style
+					}
+				}
+			}
+		}
+
+		// Check if entry is valid
+		checkIfEntryIsValid(&entry)
+
+		entries = append(entries, entry)
+	}
+
+	return entries
+}
+
+func rejectUnselectedRows(entries []Expense, selected_entries []bool) []Expense {
+
+	filtered := []Expense{}
+
+	for idx, entry := range entries {
+		if selected_entries[idx] {
+			filtered = append(filtered, entry)
+		}
+	}
+
+	return filtered
+}
+
+func checkIfEntryModified(m *foundEntriesModel, row int) {
 
 	if strconv.Itoa(m.found_entries[row].Year) != m.entries[row].Year {
 		m.edit_table.modified[row][expense_year] = 1
@@ -282,6 +466,7 @@ func check_if_entry_modified(m *foundEntriesModel, row int) {
 func (m foundEntriesModel) View() string {
 	s := ""
 	s = renderExpenses(m, s)
+	s += textStyle.Render(m.prompt_text) + "\n"
 	s = renderActions(m, s)
 	return s
 }
@@ -378,7 +563,7 @@ func renderActions(m foundEntriesModel, s string) string {
 		if m.active_view == found_action_view {
 			sym = fmt.Sprintf("Press enter to %s selected entries [x]", strings.ToLower(m.action.action_text))
 		}
-		s += activeViewStyle(m.active_view, found_action_view).Render(sym)
+		s += activeViewStyle(m.active_view, found_action_view).Render(sym) + "\n"
 	}
 
 	return s
