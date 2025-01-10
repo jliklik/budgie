@@ -22,8 +22,9 @@ type action struct {
 }
 
 type edit_table struct {
-	cursor cursor2D
-	valid  [max_entries][expense_credit + 2]int
+	cursor   cursor2D
+	valid    [max_entries][expense_credit + 2]int
+	modified [max_entries][expense_credit + 2]int
 }
 
 type foundEntriesModel struct {
@@ -142,6 +143,8 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case expense_credit:
 					entry.Credit = removeLastChar(entry.Credit)
 				}
+
+				check_if_entry_modified(&m, m.edit_table.cursor.y)
 			}
 		case "tab":
 			m.active_view = (m.active_view + 1) % found_num_views
@@ -162,7 +165,7 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
 					}
-				} else {
+				} else { // action view
 					selected_entries := make([]Expense, 0)
 					for idx, selected := range m.selected_entries {
 						if selected {
@@ -182,18 +185,23 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					m = populate_entries(m)
 				}
-			} else {
-				if m.edit_table.cursor.x == expense_credit+1 {
-					if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] {
-						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] = true
-					} else {
-						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] = false
+			} else { // edit view
+				if m.active_view == found_entries_view {
+					if m.edit_table.cursor.x == expense_credit+1 {
+						if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] {
+							m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] = true
+						} else {
+							m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] = false
+						}
 					}
+				} else {
+
 				}
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
 		default:
+			// do nothing in delete view
 			if m.action.action_text == "edit" {
 				entry := &m.entries[m.edit_table.cursor.y]
 				switch m.edit_table.cursor.x {
@@ -222,11 +230,53 @@ func (m foundEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						entry.Credit += msg.String()
 					}
 				}
+
+				check_if_entry_modified(&m, m.edit_table.cursor.y)
 			}
 		}
 	}
 
 	return m, nil
+}
+
+func check_if_entry_modified(m *foundEntriesModel, row int) {
+
+	if strconv.Itoa(m.found_entries[row].Year) != m.entries[row].Year {
+		m.edit_table.modified[row][expense_year] = 1
+	} else {
+		m.edit_table.modified[row][expense_year] = 0
+	}
+
+	if strconv.Itoa(m.found_entries[row].Month) != m.entries[row].Month {
+		m.edit_table.modified[row][expense_month] = 1
+	} else {
+		m.edit_table.modified[row][expense_month] = 0
+	}
+
+	if strconv.Itoa(m.found_entries[row].Day) != m.entries[row].Day {
+		m.edit_table.modified[row][expense_day] = 1
+	} else {
+		m.edit_table.modified[row][expense_day] = 0
+	}
+
+	if m.found_entries[row].Description != m.entries[row].Description {
+		m.edit_table.modified[row][expense_description] = 1
+	} else {
+		m.edit_table.modified[row][expense_description] = 0
+	}
+
+	if strconv.FormatFloat(m.found_entries[row].Debit, 'f', 2, 64) != m.entries[row].Debit {
+		m.edit_table.modified[row][expense_debit] = 1
+	} else {
+		m.edit_table.modified[row][expense_debit] = 0
+	}
+
+	if strconv.FormatFloat(m.found_entries[row].Credit, 'f', 2, 64) != m.entries[row].Credit {
+		m.edit_table.modified[row][expense_credit] = 1
+	} else {
+		m.edit_table.modified[row][expense_credit] = 0
+	}
+
 }
 
 func (m foundEntriesModel) View() string {
@@ -350,19 +400,23 @@ func selectEntryStyle(m foundEntriesModel, row int, col int) lipgloss.Style {
 	}
 }
 
-func selectDeleteEntryStyle(m foundEntriesModel, index int) lipgloss.Style {
-	if m.entries_cursor == index {
+// highlights entire row
+func selectDeleteEntryStyle(m foundEntriesModel, row int) lipgloss.Style {
+	if m.entries_cursor == row {
 		return selectedStyle
 	} else {
 		return inactiveStyle
 	}
 }
 
+// highlights specific cell
 func selectUpdateEntryStyle(m foundEntriesModel, y int, x int) lipgloss.Style {
 	if m.edit_table.cursor.x == x && m.edit_table.cursor.y == y {
 		return selectedStyle
 	} else if m.edit_table.valid[y][x] == error_style {
 		return errorStyle
+	} else if m.edit_table.modified[y][x] == 1 {
+		return questionStyle
 	}
 
 	return inactiveStyle

@@ -315,6 +315,7 @@ func insertManualEntriesIntoMongo(m *manualInsertModel) []Expense {
 
 		entry := Expense{}
 
+		// see if fields are valid
 		for col := 0; col < (expense_credit + 1); col++ {
 			switch col {
 			case expense_year:
