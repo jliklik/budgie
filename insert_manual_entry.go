@@ -420,7 +420,7 @@ func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
 		}
 
 		// Check if entry is valid
-		checkIfEntryIsValid(&entry)
+		checkValidEntryValues(&entry)
 
 		entries = append(entries, entry)
 	}

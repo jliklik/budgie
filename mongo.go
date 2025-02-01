@@ -45,7 +45,7 @@ const (
 	csv_total_col       = iota
 )
 
-func checkIfEntryIsValid(entry *Expense) {
+func checkValidEntryValues(entry *Expense) {
 	if entry.Month == 0 {
 		return
 	} else if entry.Day == 0 {

@@ -125,7 +125,7 @@ func (m deleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						selected_entries = append(selected_entries, m.found_entries[idx])
 					}
 				}
-				
+
 				mongoDeleteEntries(selected_entries)
 
 				// reset page
@@ -137,7 +137,7 @@ func (m deleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				m = populateDeleteEntries(m)
 			}
-			
+
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
 		default:
@@ -241,11 +241,11 @@ func numDeleteSelectedEntries(m deleteEntriesModel) int {
 func renderDeleteActions(m deleteEntriesModel, s string) string {
 
 	if numDeleteSelectedEntries(m) > 0 {
-		s += "\n" + textStyle.PaddingRight(2).Render(fmt.Sprintf("Delete selected entries?"))
+		s += "\n" + textStyle.PaddingRight(2).Render("Delete selected entries?")
 
 		sym := ""
 		if m.active_view == delete_action_view {
-			sym = fmt.Sprintf("Press enter to delete selected entries [x]")
+			sym = "Press enter to delete selected entries [x]"
 		}
 		s += activeDeleteViewStyle(m.active_view, delete_action_view).Render(sym) + "\n"
 	}
@@ -269,4 +269,3 @@ func selectDeleteEntryStyle(m deleteEntriesModel, row int) lipgloss.Style {
 		return inactiveStyle
 	}
 }
-

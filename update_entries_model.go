@@ -4,7 +4,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -18,11 +17,6 @@ const (
 	update_num_views    = iota
 )
 
-type edit_action struct {
-	action_text string
-	next_model  tea.Model
-}
-
 type edit_table struct {
 	cursor   cursor2D
 	valid    [max_entries][expense_credit + 2]int
@@ -35,21 +29,19 @@ type updateEntriesModel struct {
 	feedback               string
 	found_entries          []Expense
 	entries                []expensePlaceholder
-	selected_entries       []bool
 	found_entries_page_idx int
-	entries_cursor         int
 	edit_table             edit_table
 	prompt_text            string
+	prompt_text_style      int
 }
 
 func createUpdateEntriesModel(found_entries []Expense, entry_to_search Expense) updateEntriesModel {
 	model := updateEntriesModel{
-		entry_to_search:  entry_to_search,
-		found_entries:    found_entries,
-		selected_entries: make([]bool, len(found_entries)),
-		feedback:         default_feedback,
-		active_view:      update_entries_view,
-		prompt_text:      default_feedback,
+		entry_to_search: entry_to_search,
+		found_entries:   found_entries,
+		feedback:        default_feedback,
+		active_view:     update_entries_view,
+		prompt_text:     default_feedback,
 	}
 
 	return populateUpdateEntries(model)
@@ -103,10 +95,11 @@ func (m updateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.edit_table.cursor.y--
 			}
 		case "right":
-			if m.edit_table.cursor.x < expense_credit+1 {
+			if m.edit_table.cursor.x < expense_credit {
 				m.edit_table.cursor.x++
 			} else {
-				if m.edit_table.cursor.y < max_entries-1 {
+				num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
+				if m.edit_table.cursor.y < num_entries_on_page-1 {
 					m.edit_table.cursor.y++
 					m.edit_table.cursor.x = 0
 				}
@@ -131,41 +124,37 @@ func (m updateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			checkIfEntryModified(&m, m.edit_table.cursor.y)
 		case "tab":
 			m.active_view = (m.active_view + 1) % update_num_views
-		case "x":
-			// does same thing as enter for entries view
-			if m.active_view == update_entries_view {
-				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
-				} else {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
-				}
-			}
 		case "enter":
-			if m.active_view == update_entries_view {
-				if m.edit_table.cursor.x == expense_credit+1 {
-					if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] {
-						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] = true
-					} else {
-						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.edit_table.cursor.y] = false
+			if m.active_view == update_action_view {
+
+				valid_modified_entries := getValidModifiedEntries(&m)
+
+				// get entries being modified
+				original_entries_being_modified := []Expense{}
+				for row := 0; row < len(m.found_entries); row++ {
+					for col := 0; col < (expense_credit + 1); col++ {
+						if m.edit_table.modified[row][col] == 1 {
+							original_entries_being_modified = append(original_entries_being_modified, m.found_entries[row])
+						}
 					}
 				}
-			} else {
-				// get entries being modified
-				entries_being_modified := rejectUnselectedRows(m.found_entries, m.selected_entries)
 
-				valid_edits := checkIfEditedEntriesValid(&m)
-				filtered_valid_edits := rejectUnselectedRows(valid_edits, m.selected_entries)
-				invalid := checkForInvalidEntries(&m) || len(filtered_valid_edits) == 0
+				invalid := checkForInvalidEntries(&m) || len(valid_modified_entries) == 0
 
 				if !invalid {
-					mongoUpdateEntries(entries_being_modified, filtered_valid_edits)
-					insertingCsvScreenModel := createPostInsertCSVScreenModel(filtered_valid_edits)
+					mongoUpdateEntries(original_entries_being_modified, valid_modified_entries)
+					insertingCsvScreenModel := createPostInsertCSVScreenModel(valid_modified_entries)
 					return insertingCsvScreenModel, nil
 				} else {
-					m.prompt_text = "Some errors were detected (highlighted). Please fix and re-enter."
+					if len(original_entries_being_modified) == 0 {
+						m.prompt_text = "No entries were modified."
+						m.prompt_text_style = 1
+					} else {
+						m.prompt_text = "Some errors were detected (highlighted). Please fix and re-enter."
+						m.prompt_text_style = 1
+					}
 					m.active_view = insert_table_view
 				}
-
 			}
 		case "ctrl+c":
 			return createHomeScreenModel(), nil
@@ -209,7 +198,7 @@ func checkForInvalidEntries(m *updateEntriesModel) bool {
 	any_entry_invalid := false
 	for y := 0; y < len(m.found_entries); y++ {
 		for x := 0; x < (expense_credit + 1); x++ {
-			if (m.edit_table.valid[y][x]) == error_style && m.selected_entries[y] {
+			if (m.edit_table.valid[y][x]) == error_style {
 				any_entry_invalid = true
 				break
 			}
@@ -217,8 +206,7 @@ func checkForInvalidEntries(m *updateEntriesModel) bool {
 	}
 	return any_entry_invalid
 }
-
-func checkIfEditedEntriesValid(m *updateEntriesModel) []Expense {
+func getValidModifiedEntries(m *updateEntriesModel) []Expense {
 	entries := []Expense{}
 
 	for row := 0; row < len(m.found_entries); row++ {
@@ -330,25 +318,19 @@ func checkIfEditedEntriesValid(m *updateEntriesModel) []Expense {
 		}
 
 		// Check if entry is valid
-		checkIfEntryIsValid(&entry)
+		checkValidEntryValues(&entry)
 
-		entries = append(entries, entry)
+		// Check if entry was modified
+		for col := 0; col < (expense_credit + 1); col++ {
+			if m.edit_table.modified[row][col] == 1 {
+				entries = append(entries, entry)
+				break
+			}
+		}
+
 	}
 
 	return entries
-}
-
-func rejectUnselectedRows(entries []Expense, selected_entries []bool) []Expense {
-
-	filtered := []Expense{}
-
-	for idx, entry := range entries {
-		if selected_entries[idx] {
-			filtered = append(filtered, entry)
-		}
-	}
-
-	return filtered
 }
 
 func checkIfEntryModified(m *updateEntriesModel, row int) {
@@ -394,7 +376,7 @@ func checkIfEntryModified(m *updateEntriesModel, row int) {
 func (m updateEntriesModel) View() string {
 	s := ""
 	s = renderUpdateExpenses(m, s)
-	s += textStyle.Render(m.prompt_text) + "\n"
+	s += selectPromptTextStyle(m).Render(m.prompt_text) + "\n"
 	s = renderUpdateActions(m, s)
 	return s
 }
@@ -431,18 +413,10 @@ func renderUpdateExpenses(m updateEntriesModel, s string) string {
 	s += textStyle.Width(DefaultWidth).Render("Debit")
 	s += " | "
 	s += textStyle.Width(DefaultWidth).Render("Credit")
-	s += " | "
-	s += textStyle.Width(DefaultWidth).Render("Selected")
 	s += "\n"
 
 	// slice entries
 	sliced_entries := m.entries
-	sliced_selected_entries := m.selected_entries
-	if len(m.found_entries) > num_entries_per_page {
-		end_idx := min(len(m.found_entries), (m.found_entries_page_idx+1)*num_entries_per_page)
-		sliced_entries = m.entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
-		sliced_selected_entries = m.selected_entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
-	}
 
 	for row, entry := range sliced_entries {
 		line := selectUpdateEntryStyle(m, row, expense_year).Width(DateWidth).Render(entry.Year)
@@ -456,42 +430,21 @@ func renderUpdateExpenses(m updateEntriesModel, s string) string {
 		line += selectUpdateEntryStyle(m, row, expense_debit).Width(DefaultWidth).Render(entry.Debit)
 		line += " | "
 		line += selectUpdateEntryStyle(m, row, expense_credit).Width(DefaultWidth).Render(entry.Credit)
-		line += " | "
 
-		selected := " "
-		selected_entry_style := selectUpdateEntryStyle(m, row, expense_credit+1)
-		if len(sliced_selected_entries) > 0 && sliced_selected_entries[row] {
-			selected = "X"
-			selected_entry_style = selectedStyle
-		}
-		line += selected_entry_style.Render(fmt.Sprintf("[%s]", selected))
 		s += line + "\n"
 	}
 
 	return s
 }
 
-func numUpdateSelectedEntries(m updateEntriesModel) int {
-	num_selected := 0
-	for _, selected := range m.selected_entries {
-		if selected {
-			num_selected++
-		}
-	}
-	return num_selected
-}
-
 func renderUpdateActions(m updateEntriesModel, s string) string {
+	s += "\n" + textStyle.PaddingRight(2).Render("Edit selected entries?")
 
-	if numUpdateSelectedEntries(m) > 0 {
-		s += "\n" + textStyle.PaddingRight(2).Render(fmt.Sprintf("Edit selected entries?"))
-		
-		sym := ""
-		if m.active_view == update_action_view {
-			sym = fmt.Sprintf("Press enter to edit selected entries [x]")
-		}
-		s += activeUpdateViewStyle(m.active_view, update_action_view).Render(sym) + "\n"
+	sym := ""
+	if m.active_view == update_action_view {
+		sym = "Press enter to edit selected entries"
 	}
+	s += activeUpdateViewStyle(m.active_view, update_action_view).Render(sym) + "\n"
 
 	return s
 }
@@ -502,6 +455,14 @@ func activeUpdateViewStyle(active_view int, view int) lipgloss.Style {
 	}
 
 	return textStyle
+}
+
+func selectPromptTextStyle(m updateEntriesModel) lipgloss.Style {
+	if m.prompt_text_style == 0 {
+		return textStyle
+	} else {
+		return errorStyle
+	}
 }
 
 // highlights specific cell
