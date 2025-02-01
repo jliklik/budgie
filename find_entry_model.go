@@ -170,7 +170,11 @@ func (m findEntryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if allValid(m) {
 				m.found_entries = mongoFindMatchingEntries(m.entry_to_search)
 				// TODO: transition to found_entries_screen
-				return createFoundEntriesModel(m.found_entries, m.action, m.entry_to_search), nil
+				if m.action.action_text == "delete" {
+					return createDeleteEntriesModel(m.found_entries, m.entry_to_search), nil
+				} else {
+					return createUpdateEntriesModel(m.found_entries, m.entry_to_search), nil
+				}
 			}
 
 		case "ctrl+c":
