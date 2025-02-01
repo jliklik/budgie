@@ -248,7 +248,7 @@ func renderHeader(m manualInsertModel, s string) string {
 		sym = "[x]"
 	}
 	s += "\n" + textStyle.PaddingRight(1).Render("Please fill in entries to insert into database")
-	s += activeViewStyle(m.active_view, insert_table_view).Width(3).Render(sym)
+	s += activeDeleteViewStyle(m.active_view, insert_table_view).Width(3).Render(sym)
 	s += "\n"
 	s += textStyle.Width(DateWidth).Render("Year")
 	s += " | "
@@ -303,7 +303,7 @@ func renderInsertAction(m manualInsertModel, s string) string {
 	if m.active_view == insert_confirm_view {
 		sym = "Press enter to delete selected entries [x]"
 	}
-	s += activeViewStyle(m.active_view, insert_confirm_view).Render(sym)
+	s += activeDeleteViewStyle(m.active_view, insert_confirm_view).Render(sym)
 
 	return s
 }
@@ -420,7 +420,7 @@ func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
 		}
 
 		// Check if entry is valid
-		checkIfEntryIsValid(&entry)
+		checkValidEntryValues(&entry)
 
 		entries = append(entries, entry)
 	}
