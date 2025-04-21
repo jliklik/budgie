@@ -1,124 +1,289 @@
 package main
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type homeScreenModel struct {
-	choices  []string         // items on list
-	cursor   int              // which item our cursor is pointing at
-	selected map[int]struct{} // which items are selected
+	form          *huh.Form
+	lg            *lipgloss.Renderer
+	styles        *Styles
+	width         int
+	home_action   *string
+	csv_file_path *string
 }
 
-const HomeScreenWidth = 30
+type home_action string
 
 const (
-	insertCsvData = iota
-	insertEntry   = iota
-	updateEntry   = iota
-	deleteEntry   = iota
+	insertCsvData home_action = "Insert CSV data"
+	insertEntry   home_action = "Insert manual entry"
+	updateEntry   home_action = "Update entry"
+	deleteEntry   home_action = "Delete entries"
 )
 
-func createHomeScreenModel() homeScreenModel {
-	return homeScreenModel{
-		choices:  []string{"Insert csv data", "Insert manual entry", "Update entry", "Delete entries"},
-		selected: make(map[int]struct{}), // map of int to struct
+func GetCurrentDirectory() string {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("unable to get caller information")
 	}
+
+	dir := filepath.Dir(filename)
+	return dir
+}
+
+func createHomeScreenModel() homeScreenModel {
+	m := homeScreenModel{
+		width:         maxWidth,
+		home_action:   new(string),
+		csv_file_path: new(string),
+	}
+
+	m.lg = lipgloss.DefaultRenderer()
+	m.styles = NewStyles(m.lg)
+	m.form = huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Key("home_action").
+				Options(huh.NewOptions(string(insertCsvData), string(insertEntry), string(updateEntry), string(deleteEntry))...).
+				Title("What would you like to do?").
+				Description("Select action").
+				Value(m.home_action),
+		),
+
+		huh.NewGroup(
+			huh.NewFilePicker().
+				Key("csv_file").
+				Title("Select CSV file").
+				CurrentDirectory(fmt.Sprintf("%s/data", GetCurrentDirectory())).
+				Value(m.csv_file_path),
+		).WithHideFunc(
+			func() bool {
+				switch home_action(*m.home_action) {
+				case insertCsvData:
+					return false
+				default:
+					return true
+				}
+			},
+		),
+	).WithWidth(maxWidth).
+		WithShowHelp(false).
+		WithShowErrors(false).WithTheme(huh.ThemeCatppuccin())
+
+	return m
 }
 
 func (m homeScreenModel) Init() tea.Cmd {
-	return nil
+	return m.form.Init()
 }
 
 func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-
-	// Is it a key press?
+	case tea.WindowSizeMsg:
+		m.width = min(msg.Width, maxWidth) - m.styles.Base.GetHorizontalFrameSize()
 	case tea.KeyMsg:
-
-		// Cool, what was the actual key pressed?
 		switch msg.String() {
-
-		// These keys should exit the program.
-		case "ctrl+c", "q":
+		case "ctrl+c":
+			return m, tea.Interrupt
+		case "esc", "q":
 			return m, tea.Quit
-
-		// The "up" and "k" keys move the cursor up
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		// The "down" and "j" keys move the cursor down
-		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
-
-		// The "enter" key and the spacebar (a literal space) toggle
-		// the selected state for the item that the cursor is pointing at.
-		case "enter", " ":
-
-			switch m.cursor {
-			case insertCsvData:
-				return createInsertCSVScreenModel(), nil
-			case insertEntry:
-				return createManualInsertScreenModel(), nil
-			case updateEntry:
-				return createFindEntryModel(action{
-					action_text: "edit",
-					next_model:  nil,
-				}), nil
-			case deleteEntry:
-				return createFindEntryModel(action{
-					action_text: "delete",
-					next_model:  nil,
-				}), nil
-			}
-
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
-			}
 		}
 	}
 
-	// Return the updated model to the Bubble Tea runtime for processing.
-	// Note that we're not returning a command.
-	return m, nil
+	var cmds []tea.Cmd
+
+	// Process the form
+	form, cmd := m.form.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.form = f
+		cmds = append(cmds, cmd)
+	}
+
+	if m.form.State == huh.StateCompleted {
+		switch home_action(*m.home_action) {
+		case insertCsvData:
+			log.Printf("picked: %s", m.form.GetString("csv_file"))
+			log.Printf("current directory: %s", GetCurrentDirectory())
+			return EnterCSV(m)
+		case insertEntry:
+			return createManualInsertScreenModel(), nil
+		case updateEntry:
+			return createFindEntryModel(action{
+				action_text: "edit",
+				next_model:  nil,
+			}), nil
+		case deleteEntry:
+			return createFindEntryModel(action{
+				action_text: "delete",
+				next_model:  nil,
+			}), nil
+		}
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m homeScreenModel) View() string {
-	// The header
-	s := textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("What would you like to do?") + "\n"
 
-	content := ""
-	// Iterate over our choices
-	for i, choice := range m.choices {
+	s := m.styles
 
-		// Is the cursor pointing at this choice?
-		cursor := " " // no cursor
-		if m.cursor == i {
-			cursor = ">" // cursor!
-			content += selectedStyle.Width(HomeScreenWidth).Render(fmt.Sprintf("%s %s", cursor, choice))
-		} else {
-			content += inactiveStyle.Width(HomeScreenWidth).Render(fmt.Sprintf("%s %s", cursor, choice))
-		}
+	// Form (left side)
+	v := strings.TrimSuffix(m.form.View(), "\n\n")
+	form := m.lg.NewStyle().Margin(1, 0).Render(v)
 
-		if i < len(m.choices)-1 {
-			content += "\n"
-		}
+	errors := m.form.Errors()
+	header := m.appBoundaryView("Budgie - Budget Manager v0.0.1 🪺 ")
+	if len(errors) > 0 {
+		header = m.appErrorBoundaryView(m.errorView())
 	}
 
-	s += inactiveStyle.Width(HomeScreenWidth).Render(content)
+	footer := m.appBoundaryView(m.form.Help().ShortHelpView(m.form.KeyBinds()))
+	if len(errors) > 0 {
+		footer = m.appErrorBoundaryView("")
+	}
 
-	// The footer
-	s += "\n\n" + textStyle.Width(HomeScreenWidth).PaddingLeft(2).Render("Press q to quit.") + "\n"
+	return s.Base.Render(header + "\n" + form + "\n\n" + footer)
 
-	// Send the UI for rendering
+}
+
+func (m homeScreenModel) errorView() string {
+	var s string
+	for _, err := range m.form.Errors() {
+		s += err.Error()
+	}
 	return s
+}
+
+func (m homeScreenModel) appBoundaryView(text string) string {
+	return lipgloss.PlaceHorizontal(
+		m.width,
+		lipgloss.Left,
+		m.styles.HeaderText.Render(text),
+		lipgloss.WithWhitespaceChars("/"),
+		lipgloss.WithWhitespaceForeground(brown),
+	)
+}
+
+func (m homeScreenModel) appErrorBoundaryView(text string) string {
+	return lipgloss.PlaceHorizontal(
+		m.width,
+		lipgloss.Left,
+		m.styles.ErrorHeaderText.Render(text),
+		lipgloss.WithWhitespaceChars("/"),
+		lipgloss.WithWhitespaceForeground(red),
+	)
+}
+
+func EnterCSV(m homeScreenModel) (tea.Model, tea.Cmd) {
+	log.Printf("Reading csv: %s", m.csv_file_path)
+	data, err := readCSV(m.csv_file_path)
+	if err != nil {
+		log.Printf("Error reading file! %v", err)
+		return m, tea.Quit
+	}
+	reader, err := createCSVReader(data)
+	if err != nil {
+		log.Printf("Error creating CSV reader: %v", err)
+		return m, tea.Quit
+	}
+	expenses_inserted := insertCSVIntoMongo(reader)
+	return createPostInsertCSVScreenModel(expenses_inserted), nil
+}
+
+func readCSV(filename *string) ([]byte, error) {
+	f, err := os.Open(*filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func createCSVReader(data []byte) (*csv.Reader, error) {
+	reader := csv.NewReader(bytes.NewReader(data))
+	return reader, nil
+}
+
+func insertCSVIntoMongo(reader *csv.Reader) []Expense {
+
+	entries := []Expense{}
+
+	for {
+		record, err := reader.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				log.Printf("Error reading CSV data: %v", err)
+				break
+			}
+		}
+
+		entry := Expense{}
+
+		for i, str := range record {
+			switch i {
+			case csv_date_col:
+				// parse date
+				layout := "01/02/2006"
+				parsedDate, err := time.Parse(layout, str)
+				if err == nil {
+					entry.Month = int(parsedDate.Month())
+					entry.Day = parsedDate.Day()
+					entry.Year = parsedDate.Year()
+				}
+			case csv_description_col:
+				entry.Description = str
+			case csv_debit_col:
+				val, err := strconv.ParseFloat(str, 64)
+				if err == nil {
+					entry.Debit = val
+				}
+			case csv_credit_col:
+				val, err := strconv.ParseFloat(str, 64)
+				if err == nil {
+					entry.Credit = val
+				}
+			case csv_total_col:
+				val, err := strconv.ParseFloat(str, 64)
+				if err == nil {
+					entry.Total = val
+				}
+			}
+		}
+
+		// Check if entry is valid
+		checkValidEntryValues(&entry)
+
+		entries = append(entries, entry)
+	}
+
+	// context.TODO() creates an empty context
+	// options.Client().ApplyURI() is part of mongo-driver/mongo/options package
+
+	err := mongoInsertEntries(entries)
+	if err != nil {
+		log.Printf("Error inserting data into mongodb: %v", err)
+	}
+
+	return entries
 }
