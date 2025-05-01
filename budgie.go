@@ -20,6 +20,33 @@ const num_entries_per_page = 10
 
 const interface_log_file = "budgie.log"
 
+type valid_status int
+
+const (
+	valid_inactive valid_status = iota
+	valid_error    valid_status = iota
+	valid_selected valid_status = iota
+)
+
+type Cursor2D struct {
+	x int
+	y int
+}
+
+type TrackEditsTable struct {
+	modified [][]bool
+	valid    [][]valid_status
+}
+
+type ExpensePlaceholder struct {
+	Month       string
+	Day         string
+	Year        string
+	Description string
+	Debit       string
+	Credit      string
+}
+
 func main() {
 
 	file, err := os.OpenFile(interface_log_file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

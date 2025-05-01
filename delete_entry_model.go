@@ -22,20 +22,20 @@ type action struct {
 	next_model  tea.Model
 }
 
-type deleteEntriesModel struct {
+type DeleteEntriesModel struct {
 	entry_to_search        Expense
 	active_view            int
 	feedback               string
 	found_entries          []Expense
-	entries                []expensePlaceholder
+	entries                []ExpensePlaceholder
 	selected_entries       []bool
 	found_entries_page_idx int
 	entries_cursor         int
 	prompt_text            string
 }
 
-func createDeleteEntriesModel(found_entries []Expense, entry_to_search Expense) deleteEntriesModel {
-	model := deleteEntriesModel{
+func createDeleteEntriesModel(found_entries []Expense, entry_to_search Expense) DeleteEntriesModel {
+	model := DeleteEntriesModel{
 		entry_to_search:  entry_to_search,
 		found_entries:    found_entries,
 		selected_entries: make([]bool, len(found_entries)),
@@ -47,9 +47,9 @@ func createDeleteEntriesModel(found_entries []Expense, entry_to_search Expense) 
 	return populateDeleteEntries(model)
 }
 
-func populateDeleteEntries(m deleteEntriesModel) deleteEntriesModel {
+func populateDeleteEntries(m DeleteEntriesModel) DeleteEntriesModel {
 
-	m.entries = make([]expensePlaceholder, len(m.found_entries))
+	m.entries = make([]ExpensePlaceholder, len(m.found_entries))
 
 	for idx, entry := range m.found_entries {
 		m.entries[idx].Year = strconv.Itoa(entry.Year)
@@ -63,11 +63,11 @@ func populateDeleteEntries(m deleteEntriesModel) deleteEntriesModel {
 	return m
 }
 
-func (m deleteEntriesModel) Init() tea.Cmd {
+func (m DeleteEntriesModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m deleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m DeleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.KeyMsg:
@@ -148,7 +148,7 @@ func (m deleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m deleteEntriesModel) View() string {
+func (m DeleteEntriesModel) View() string {
 	s := ""
 	s = renderDeleteExpenses(m, s)
 	s += textStyle.Render(m.prompt_text) + "\n"
@@ -156,7 +156,7 @@ func (m deleteEntriesModel) View() string {
 	return s
 }
 
-func renderDeleteExpenses(m deleteEntriesModel, s string) string {
+func renderDeleteExpenses(m DeleteEntriesModel, s string) string {
 	sym := " "
 	if m.active_view == delete_entries_view {
 		sym = "[x]"
@@ -228,7 +228,7 @@ func renderDeleteExpenses(m deleteEntriesModel, s string) string {
 	return s
 }
 
-func numDeleteSelectedEntries(m deleteEntriesModel) int {
+func numDeleteSelectedEntries(m DeleteEntriesModel) int {
 	num_selected := 0
 	for _, selected := range m.selected_entries {
 		if selected {
@@ -238,7 +238,7 @@ func numDeleteSelectedEntries(m deleteEntriesModel) int {
 	return num_selected
 }
 
-func renderDeleteActions(m deleteEntriesModel, s string) string {
+func renderDeleteActions(m DeleteEntriesModel, s string) string {
 
 	if numDeleteSelectedEntries(m) > 0 {
 		s += "\n" + textStyle.PaddingRight(2).Render("Delete selected entries?")
@@ -262,7 +262,7 @@ func activeDeleteViewStyle(active_view int, view int) lipgloss.Style {
 }
 
 // highlights entire row
-func selectDeleteEntryStyle(m deleteEntriesModel, row int) lipgloss.Style {
+func selectDeleteEntryStyle(m DeleteEntriesModel, row int) lipgloss.Style {
 	if m.entries_cursor == row {
 		return selectedStyle
 	} else {
