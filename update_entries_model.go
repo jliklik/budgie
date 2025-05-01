@@ -5,6 +5,7 @@ package main
 
 import (
 	"log"
+	"slices"
 	"strconv"
 	"time"
 
@@ -152,21 +153,23 @@ func (m UpdateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.active_view == update_action_view {
 
-				valid_modified_entries := getValidModifiedEntries(&m)
+				valid_modified_entries, valid_modified_rows := getValidModifiedEntries(&m)
 
 				// get entries being modified
 				original_entries_being_modified := []Expense{}
 				for row := 0; row < len(m.found_entries); row++ {
-					for col := 0; col < (expense_credit + 1); col++ {
-						if m.track_edits_table.modified[row][col] {
-							original_entries_being_modified = append(original_entries_being_modified, m.found_entries[row])
-						}
+					if slices.Contains(valid_modified_rows, row) {
+						original_entries_being_modified = append(original_entries_being_modified, m.found_entries[row])
 					}
 				}
 
 				invalid := checkForInvalidEntries(&m) || len(valid_modified_entries) == 0
 
 				if !invalid {
+
+					log.Print(original_entries_being_modified)
+					log.Print(valid_modified_entries)
+
 					mongoUpdateEntries(original_entries_being_modified, valid_modified_entries)
 					insertingCsvScreenModel := createPostInsertCSVScreenModel(valid_modified_entries)
 					return insertingCsvScreenModel, nil
@@ -235,9 +238,10 @@ func checkForInvalidEntries(m *UpdateEntriesModel) bool {
 	return any_entry_invalid
 }
 
-// Checks m.entries
-func getValidModifiedEntries(m *UpdateEntriesModel) []Expense {
+// Scans all entries to find valid modified entries
+func getValidModifiedEntries(m *UpdateEntriesModel) ([]Expense, []int) {
 	entries := []Expense{}
+	valid_modified_rows := []int{}
 
 	for row := 0; row < len(m.found_entries); row++ {
 
@@ -354,13 +358,14 @@ func getValidModifiedEntries(m *UpdateEntriesModel) []Expense {
 		for col := 0; col < (expense_credit + 1); col++ {
 			if m.track_edits_table.modified[row][col] {
 				entries = append(entries, entry)
+				valid_modified_rows = append(valid_modified_rows, row)
 				break
 			}
 		}
 
 	}
 
-	return entries
+	return entries, valid_modified_rows
 }
 
 func checkIfEntryModified(m *UpdateEntriesModel, row int) {
