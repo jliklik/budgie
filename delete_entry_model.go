@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,9 +29,9 @@ type DeleteEntriesModel struct {
 	feedback               string
 	found_entries          []Expense
 	entries                []ExpensePlaceholder
-	selected_entries       []bool
 	found_entries_page_idx int
-	entries_cursor         int
+	selected_entries       []bool
+	cursor                 Cursor2D
 	prompt_text            string
 }
 
@@ -48,6 +49,8 @@ func createDeleteEntriesModel(found_entries []Expense, entry_to_search Expense) 
 }
 
 func populateDeleteEntries(m DeleteEntriesModel) DeleteEntriesModel {
+
+	log.Printf("update form number of entries: %d", len(m.found_entries))
 
 	m.entries = make([]ExpensePlaceholder, len(m.found_entries))
 
@@ -76,47 +79,46 @@ func (m DeleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "up":
 			if m.active_view == delete_entries_view {
-				if m.entries_cursor > 0 {
-					m.entries_cursor--
+				if m.cursor.y > 0 {
+					m.cursor.y--
 				}
 			}
+
 		case "down":
 			if m.active_view == delete_entries_view {
 				num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
-				if m.entries_cursor < num_entries_on_page-1 {
-					m.entries_cursor++
+				if m.cursor.y < num_entries_on_page-1 {
+					m.cursor.y++
 				}
 			}
 
 		case "left":
 			if m.found_entries_page_idx > 0 {
-				m.found_entries_page_idx--
-				m.entries_cursor = 0
+				m.found_entries_page_idx -= 1
 			}
+
 		case "right":
-			num_pages := len(m.found_entries) / num_entries_per_page
-			if m.found_entries_page_idx < num_pages {
-				m.found_entries_page_idx++
-				m.entries_cursor = 0
+			if (m.found_entries_page_idx+1)*max_entries < len(m.entries) {
+				m.found_entries_page_idx += 1
 			}
 
 		case "tab":
 			m.active_view = (m.active_view + 1) % delete_num_views
 		case "x":
-			// does same thing as enter for entries view
+			// toggle selected entries
 			if m.active_view == delete_entries_view {
-				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
+				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] {
+					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] = true
 				} else {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
+					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] = false
 				}
 			}
 		case "enter":
 			if m.active_view == delete_entries_view {
-				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = true
+				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] {
+					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] = true
 				} else {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.entries_cursor] = false
+					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] = false
 				}
 			} else { // action view
 				selected_entries := make([]Expense, 0)
@@ -133,7 +135,7 @@ func (m DeleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selected_entries = make([]bool, len(m.found_entries))
 
 				m.active_view = delete_entries_view
-				m.entries_cursor = 0
+				m.cursor.y = 0
 
 				m = populateDeleteEntries(m)
 			}
@@ -193,13 +195,12 @@ func renderDeleteExpenses(m DeleteEntriesModel, s string) string {
 	s += "\n"
 
 	// slice entries
-	sliced_entries := m.entries
-	sliced_selected_entries := m.selected_entries
-	if len(m.found_entries) > num_entries_per_page {
-		end_idx := min(len(m.found_entries), (m.found_entries_page_idx+1)*num_entries_per_page)
-		sliced_entries = m.entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
-		sliced_selected_entries = m.selected_entries[m.found_entries_page_idx*num_entries_per_page : end_idx]
-	}
+
+	start_idx := m.found_entries_page_idx * max_entries
+	end_idx := min(start_idx+max_entries, len(m.entries))
+	sliced_entries := m.entries[start_idx:end_idx]
+
+	sliced_selected_entries := m.selected_entries[start_idx:end_idx]
 
 	for row, entry := range sliced_entries {
 		line := selectDeleteEntryStyle(m, row).Width(DateWidth).Render(entry.Year)
@@ -217,6 +218,7 @@ func renderDeleteExpenses(m DeleteEntriesModel, s string) string {
 
 		selected := " "
 		selected_entry_style := selectDeleteEntryStyle(m, row)
+		// check len to prevent erroring if no entries found
 		if len(sliced_selected_entries) > 0 && sliced_selected_entries[row] {
 			selected = "X"
 			selected_entry_style = selectedStyle
@@ -263,7 +265,7 @@ func activeDeleteViewStyle(active_view int, view int) lipgloss.Style {
 
 // highlights entire row
 func selectDeleteEntryStyle(m DeleteEntriesModel, row int) lipgloss.Style {
-	if m.entries_cursor == row {
+	if m.cursor.y == row {
 		return selectedStyle
 	} else {
 		return inactiveStyle

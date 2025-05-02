@@ -264,6 +264,29 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return new_m, new_m.Init()
 
 		case deleteEntry:
+			m.entry_to_search.Year = invalid
+			if *m.search_expense_year != "" {
+				m.entry_to_search.Year, _ = strconv.Atoi(*m.search_expense_year)
+			}
+			m.entry_to_search.Month = invalid
+			if *m.search_expense_month != "All" {
+				month, _ := time.Parse("Jan", *m.search_expense_month)
+				m.entry_to_search.Month = int(month.Month())
+			}
+			m.entry_to_search.Day = invalid
+			if *m.search_expense_day != "" {
+				m.entry_to_search.Day, _ = strconv.Atoi(*m.search_expense_day)
+			}
+			m.entry_to_search.Description = *m.search_expense_description
+			m.entry_to_search.Debit = invalid
+			if *m.search_expense_debit != "" {
+				m.entry_to_search.Debit, _ = strconv.ParseFloat(*m.search_expense_debit, 64)
+			}
+			m.entry_to_search.Credit = invalid
+			if *m.search_expense_credit != "" {
+				m.entry_to_search.Credit, _ = strconv.ParseFloat(*m.search_expense_credit, 64)
+			}
+
 			found_entries := mongoFindMatchingEntries(m.entry_to_search)
 			new_m := createDeleteEntriesModel(found_entries, m.entry_to_search)
 			return new_m, new_m.Init()
