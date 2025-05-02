@@ -178,7 +178,8 @@ func (m findEntryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "ctrl+c":
-			return createHomeScreenModel(), nil
+			new_m := createHomeScreenModel()
+			return new_m, new_m.Init()
 		default:
 			m.fields[m.search_cursor] += msg.String()
 		}

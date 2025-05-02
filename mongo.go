@@ -61,16 +61,17 @@ func checkValidEntryValues(entry *Expense) {
 	entry.Valid = true
 }
 
-func mongoInsertEntries(entries []Expense) {
+func mongoInsertEntries(entries []Expense) error {
 	ctx := context.TODO()
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(MongoUri))
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	defer func() {
 		if err = client.Disconnect(ctx); err != nil {
+			log.Print(err)
 			panic(err)
 		}
 	}()
@@ -82,6 +83,8 @@ func mongoInsertEntries(entries []Expense) {
 			coll.InsertOne(ctx, entry)
 		}
 	}
+
+	return nil
 }
 
 func mongoFindMatchingEntries(entry Expense) []Expense {

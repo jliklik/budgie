@@ -14,52 +14,48 @@ const (
 	insert_num_views    = iota
 )
 
-type cursor2D struct {
-	x int
-	y int
-}
-
-const (
-	inactive_style = iota
-	error_style    = iota
-	selected_style = iota
-)
-
-type manualInsertModel struct {
-	active_view int
-	cursor      cursor2D
-	valid       [max_entries][expense_credit + 1]int
-	entries     []expensePlaceholder
-	prompt_text string
-}
-
-type expensePlaceholder struct {
-	Month       string
-	Day         string
-	Year        string
-	Description string
-	Debit       string
-	Credit      string
+type ManualInsertModel struct {
+	active_view       int
+	cursor            Cursor2D
+	track_edits_table TrackEditsTable
+	entries           []ExpensePlaceholder
+	prompt_text       string
 }
 
 const max_entries = 10
 
-func createManualInsertScreenModel() manualInsertModel {
-	return manualInsertModel{
-		cursor: cursor2D{
+func createManualInsertScreenModel() ManualInsertModel {
+	modified := make([][]bool, max_entries) // Allocate the outer slice
+	for i := range modified {
+		modified[i] = make([]bool, expense_credit+1) // Allocate each inner slice
+	}
+
+	valid := make([][]valid_status, max_entries) // Allocate the outer slice
+	for i := range valid {
+		valid[i] = make([]valid_status, expense_credit+1) // Allocate each inner slice
+	}
+
+	track_edits_table := TrackEditsTable{
+		modified: modified,
+		valid:    valid,
+	}
+
+	return ManualInsertModel{
+		cursor: Cursor2D{
 			x: 0,
 			y: 0,
 		},
-		entries:     make([]expensePlaceholder, max_entries),
-		prompt_text: default_feedback,
+		entries:           make([]ExpensePlaceholder, max_entries),
+		prompt_text:       default_feedback,
+		track_edits_table: track_edits_table,
 	}
 }
 
-func (m manualInsertModel) Init() tea.Cmd {
+func (m ManualInsertModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m ManualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	// Is it a key press?
@@ -68,7 +64,8 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 
 		case "ctrl+c":
-			return createHomeScreenModel(), nil
+			new_m := createHomeScreenModel()
+			return new_m, new_m.Init()
 
 		case "up":
 			if m.active_view == insert_confirm_view {
@@ -162,7 +159,7 @@ func (m manualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				any_entry_invalid := false
 				for y := 0; y < max_entries; y++ {
 					for x := 0; x < (expense_credit + 1); x++ {
-						if (m.valid[y][x]) == error_style {
+						if (m.track_edits_table.valid[y][x]) == valid_error {
 							any_entry_invalid = true
 							break
 						}
@@ -231,7 +228,7 @@ func removeLastChar(s string) string {
 	return s
 }
 
-func (m manualInsertModel) View() string {
+func (m ManualInsertModel) View() string {
 	s := ""
 	s = renderHeader(m, s)
 	s = renderEntries(m, s)
@@ -242,7 +239,7 @@ func (m manualInsertModel) View() string {
 	return s
 }
 
-func renderHeader(m manualInsertModel, s string) string {
+func renderHeader(m ManualInsertModel, s string) string {
 	sym := " "
 	if m.active_view == insert_table_view {
 		sym = "[x]"
@@ -265,17 +262,17 @@ func renderHeader(m manualInsertModel, s string) string {
 	return s
 }
 
-func styleIfCursorIsHere(m manualInsertModel, x int, y int) lipgloss.Style {
+func styleIfCursorIsHere(m ManualInsertModel, x int, y int) lipgloss.Style {
 	if m.cursor.x == x && m.cursor.y == y {
 		return selectedStyle
-	} else if m.valid[y][x] == error_style {
+	} else if m.track_edits_table.valid[y][x] == valid_error {
 		return errorStyle
 	}
 
 	return inactiveStyle
 }
 
-func renderEntries(m manualInsertModel, s string) string {
+func renderEntries(m ManualInsertModel, s string) string {
 	s += "\n"
 	for row, entry := range m.entries {
 		line := styleIfCursorIsHere(m, expense_year, row).Width(DateWidth).Render(entry.Year)
@@ -295,7 +292,7 @@ func renderEntries(m manualInsertModel, s string) string {
 	return s
 }
 
-func renderInsertAction(m manualInsertModel, s string) string {
+func renderInsertAction(m ManualInsertModel, s string) string {
 
 	s += "\n" + textStyle.PaddingRight(2).Render("Insert selected entries?")
 
@@ -308,7 +305,7 @@ func renderInsertAction(m manualInsertModel, s string) string {
 	return s
 }
 
-func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
+func checkIfManualEntriesValid(m *ManualInsertModel) []Expense {
 	entries := []Expense{}
 
 	for row := 0; row < max_entries; row++ {
@@ -323,15 +320,15 @@ func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
 					year, err := strconv.Atoi(m.entries[row].Year)
 					if err == nil {
 						entry.Year = year
-						m.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					}
 				} else {
 					if m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_month:
@@ -339,22 +336,22 @@ func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
 					month, err := time.Parse("Jan", m.entries[row].Month)
 					if err == nil {
 						entry.Month = int(month.Month())
-						m.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
 						// try parsing number
 						month, err := strconv.Atoi(m.entries[row].Month)
 						if err == nil && month >= 1 && month <= 12 {
 							entry.Month = month
-							m.valid[row][col] = selected_style
+							m.track_edits_table.valid[row][col] = valid_selected
 						} else {
-							m.valid[row][col] = error_style
+							m.track_edits_table.valid[row][col] = valid_error
 						}
 					}
 				} else {
 					if m.entries[row].Year != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_day:
@@ -362,26 +359,26 @@ func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
 					day, err := strconv.Atoi(m.entries[row].Day)
 					if err == nil && day >= 1 && day <= 31 {
 						entry.Day = day
-						m.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					}
 				} else {
 					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_description:
 				if m.entries[row].Description != "" {
 					entry.Description = m.entries[row].Description
-					m.valid[row][col] = selected_style
+					m.track_edits_table.valid[row][col] = valid_selected
 				} else {
 					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_debit:
@@ -389,15 +386,15 @@ func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
 					val, err := strconv.ParseFloat(m.entries[row].Debit, 64)
 					if err == nil {
 						entry.Debit = val
-						m.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					}
 				} else {
 					if (m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "") && m.entries[row].Credit == "" {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_credit:
@@ -405,15 +402,15 @@ func checkIfManualEntriesValid(m *manualInsertModel) []Expense {
 					val, err := strconv.ParseFloat(m.entries[row].Credit, 64)
 					if err == nil {
 						entry.Credit = val
-						m.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					}
 				} else {
 					if (m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "") && m.entries[row].Debit == "" {
-						m.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			}

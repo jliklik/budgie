@@ -4,6 +4,8 @@
 package main
 
 import (
+	"log"
+	"slices"
 	"strconv"
 	"time"
 
@@ -17,26 +19,21 @@ const (
 	update_num_views    = iota
 )
 
-type edit_table struct {
-	cursor   cursor2D
-	valid    [max_entries][expense_credit + 2]int
-	modified [max_entries][expense_credit + 2]int
-}
-
-type updateEntriesModel struct {
+type UpdateEntriesModel struct {
 	entry_to_search        Expense
 	active_view            int
 	feedback               string
 	found_entries          []Expense
-	entries                []expensePlaceholder
+	entries                []ExpensePlaceholder
 	found_entries_page_idx int
-	edit_table             edit_table
+	cursor                 Cursor2D
+	track_edits_table      TrackEditsTable
 	prompt_text            string
 	prompt_text_style      int
 }
 
-func createUpdateEntriesModel(found_entries []Expense, entry_to_search Expense) updateEntriesModel {
-	model := updateEntriesModel{
+func createUpdateEntriesModel(found_entries []Expense, entry_to_search Expense) UpdateEntriesModel {
+	model := UpdateEntriesModel{
 		entry_to_search: entry_to_search,
 		found_entries:   found_entries,
 		feedback:        default_feedback,
@@ -47,10 +44,28 @@ func createUpdateEntriesModel(found_entries []Expense, entry_to_search Expense) 
 	return populateUpdateEntries(model)
 }
 
-func populateUpdateEntries(m updateEntriesModel) updateEntriesModel {
+func populateUpdateEntries(m UpdateEntriesModel) UpdateEntriesModel {
 
-	m.entries = make([]expensePlaceholder, len(m.found_entries))
+	m.entries = make([]ExpensePlaceholder, len(m.found_entries))
 
+	modified := make([][]bool, len(m.found_entries)) // Allocate the outer slice
+	for i := range modified {
+		modified[i] = make([]bool, expense_credit+1) // Allocate each inner slice
+	}
+
+	valid := make([][]valid_status, len(m.found_entries)) // Allocate the outer slice
+	for i := range valid {
+		valid[i] = make([]valid_status, expense_credit+1) // Allocate each inner slice
+	}
+
+	m.track_edits_table = TrackEditsTable{
+		modified: modified,
+		valid:    valid,
+	}
+
+	log.Printf("update form number of entries: %d", len(m.found_entries))
+
+	// Convert found_entries all to string
 	for idx, entry := range m.found_entries {
 		m.entries[idx].Year = strconv.Itoa(entry.Year)
 		m.entries[idx].Month = strconv.Itoa(entry.Month)
@@ -63,11 +78,11 @@ func populateUpdateEntries(m updateEntriesModel) updateEntriesModel {
 	return m
 }
 
-func (m updateEntriesModel) Init() tea.Cmd {
+func (m UpdateEntriesModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m updateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m UpdateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.KeyMsg:
@@ -76,37 +91,48 @@ func (m updateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "up":
 			if m.active_view == update_entries_view {
-				if m.edit_table.cursor.y > 0 {
-					m.edit_table.cursor.y--
+				if m.cursor.y > 0 {
+					m.cursor.y--
 				}
 			}
 		case "down":
 			if m.active_view == update_entries_view {
 				num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
-				if m.edit_table.cursor.y < num_entries_on_page-1 {
-					m.edit_table.cursor.y++
+				if m.cursor.y < num_entries_on_page-1 {
+					m.cursor.y++
 				}
 			}
 		case "left":
-			if m.edit_table.cursor.x > 0 {
-				m.edit_table.cursor.x--
+			if m.cursor.x > 0 {
+				m.cursor.x--
 			} else {
-				m.edit_table.cursor.x = expense_credit
-				m.edit_table.cursor.y--
+				m.cursor.x = expense_credit
+				m.cursor.y--
 			}
 		case "right":
-			if m.edit_table.cursor.x < expense_credit {
-				m.edit_table.cursor.x++
+			if m.cursor.x < expense_credit {
+				m.cursor.x++
 			} else {
 				num_entries_on_page := min(num_entries_per_page, len(m.found_entries)-(m.found_entries_page_idx*num_entries_per_page))
-				if m.edit_table.cursor.y < num_entries_on_page-1 {
-					m.edit_table.cursor.y++
-					m.edit_table.cursor.x = 0
+				if m.cursor.y < num_entries_on_page-1 {
+					m.cursor.y++
+					m.cursor.x = 0
 				}
 			}
+		case ">":
+			if (m.found_entries_page_idx+1)*max_entries < len(m.entries) {
+				m.found_entries_page_idx += 1
+			}
+		case "<":
+			if m.found_entries_page_idx > 0 {
+				m.found_entries_page_idx -= 1
+			}
 		case "backspace":
-			entry := &m.entries[m.edit_table.cursor.y]
-			switch m.edit_table.cursor.x {
+			start_idx := m.found_entries_page_idx * max_entries
+			row := start_idx + m.cursor.y
+
+			entry := &m.entries[row]
+			switch m.cursor.x {
 			case expense_year:
 				entry.Year = removeLastChar(entry.Year)
 			case expense_month:
@@ -121,27 +147,29 @@ func (m updateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				entry.Credit = removeLastChar(entry.Credit)
 			}
 
-			checkIfEntryModified(&m, m.edit_table.cursor.y)
+			checkIfEntryModified(&m, row)
 		case "tab":
 			m.active_view = (m.active_view + 1) % update_num_views
 		case "enter":
 			if m.active_view == update_action_view {
 
-				valid_modified_entries := getValidModifiedEntries(&m)
+				valid_modified_entries, valid_modified_rows := getValidModifiedEntries(&m)
 
 				// get entries being modified
 				original_entries_being_modified := []Expense{}
 				for row := 0; row < len(m.found_entries); row++ {
-					for col := 0; col < (expense_credit + 1); col++ {
-						if m.edit_table.modified[row][col] == 1 {
-							original_entries_being_modified = append(original_entries_being_modified, m.found_entries[row])
-						}
+					if slices.Contains(valid_modified_rows, row) {
+						original_entries_being_modified = append(original_entries_being_modified, m.found_entries[row])
 					}
 				}
 
 				invalid := checkForInvalidEntries(&m) || len(valid_modified_entries) == 0
 
 				if !invalid {
+
+					log.Print(original_entries_being_modified)
+					log.Print(valid_modified_entries)
+
 					mongoUpdateEntries(original_entries_being_modified, valid_modified_entries)
 					insertingCsvScreenModel := createPostInsertCSVScreenModel(valid_modified_entries)
 					return insertingCsvScreenModel, nil
@@ -157,10 +185,14 @@ func (m updateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "ctrl+c":
-			return createHomeScreenModel(), nil
+			new_m := createHomeScreenModel()
+			return new_m, new_m.Init()
 		default:
-			entry := &m.entries[m.edit_table.cursor.y]
-			switch m.edit_table.cursor.x {
+			start_idx := m.found_entries_page_idx * max_entries
+			row := start_idx + m.cursor.y
+
+			entry := &m.entries[row]
+			switch m.cursor.x {
 			case expense_year:
 				if len(entry.Year) < DateWidth {
 					entry.Year += msg.String()
@@ -187,18 +219,18 @@ func (m updateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			checkIfEntryModified(&m, m.edit_table.cursor.y)
+			checkIfEntryModified(&m, row)
 		}
 	}
 
 	return m, nil
 }
 
-func checkForInvalidEntries(m *updateEntriesModel) bool {
+func checkForInvalidEntries(m *UpdateEntriesModel) bool {
 	any_entry_invalid := false
 	for y := 0; y < len(m.found_entries); y++ {
 		for x := 0; x < (expense_credit + 1); x++ {
-			if (m.edit_table.valid[y][x]) == error_style {
+			if (m.track_edits_table.valid[y][x]) == valid_error {
 				any_entry_invalid = true
 				break
 			}
@@ -206,8 +238,11 @@ func checkForInvalidEntries(m *updateEntriesModel) bool {
 	}
 	return any_entry_invalid
 }
-func getValidModifiedEntries(m *updateEntriesModel) []Expense {
+
+// Scans all entries to find valid modified entries
+func getValidModifiedEntries(m *UpdateEntriesModel) ([]Expense, []int) {
 	entries := []Expense{}
+	valid_modified_rows := []int{}
 
 	for row := 0; row < len(m.found_entries); row++ {
 
@@ -221,15 +256,15 @@ func getValidModifiedEntries(m *updateEntriesModel) []Expense {
 					year, err := strconv.Atoi(m.entries[row].Year)
 					if err == nil {
 						entry.Year = year
-						m.edit_table.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					}
 				} else {
 					if m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.edit_table.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_month:
@@ -237,22 +272,22 @@ func getValidModifiedEntries(m *updateEntriesModel) []Expense {
 					month, err := time.Parse("Jan", m.entries[row].Month)
 					if err == nil {
 						entry.Month = int(month.Month())
-						m.edit_table.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
 						// try parsing number
 						month, err := strconv.Atoi(m.entries[row].Month)
 						if err == nil && month >= 1 && month <= 12 {
 							entry.Month = month
-							m.edit_table.valid[row][col] = selected_style
+							m.track_edits_table.valid[row][col] = valid_selected
 						} else {
-							m.edit_table.valid[row][col] = error_style
+							m.track_edits_table.valid[row][col] = valid_error
 						}
 					}
 				} else {
 					if m.entries[row].Year != "" || m.entries[row].Day != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.edit_table.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_day:
@@ -260,26 +295,26 @@ func getValidModifiedEntries(m *updateEntriesModel) []Expense {
 					day, err := strconv.Atoi(m.entries[row].Day)
 					if err == nil && day >= 1 && day <= 31 {
 						entry.Day = day
-						m.edit_table.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					}
 				} else {
 					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Description != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.edit_table.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_description:
 				if m.entries[row].Description != "" {
 					entry.Description = m.entries[row].Description
-					m.edit_table.valid[row][col] = selected_style
+					m.track_edits_table.valid[row][col] = valid_selected
 				} else {
 					if m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Debit != "" || m.entries[row].Credit != "" {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.edit_table.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_debit:
@@ -287,15 +322,15 @@ func getValidModifiedEntries(m *updateEntriesModel) []Expense {
 					val, err := strconv.ParseFloat(m.entries[row].Debit, 64)
 					if err == nil {
 						entry.Debit = val
-						m.edit_table.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					}
 				} else {
 					if (m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "") && m.entries[row].Credit == "" {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.edit_table.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			case expense_credit:
@@ -303,15 +338,15 @@ func getValidModifiedEntries(m *updateEntriesModel) []Expense {
 					val, err := strconv.ParseFloat(m.entries[row].Credit, 64)
 					if err == nil {
 						entry.Credit = val
-						m.edit_table.valid[row][col] = selected_style
+						m.track_edits_table.valid[row][col] = valid_selected
 					} else {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					}
 				} else {
 					if (m.entries[row].Year != "" || m.entries[row].Month != "" || m.entries[row].Day != "" || m.entries[row].Description != "") && m.entries[row].Debit == "" {
-						m.edit_table.valid[row][col] = error_style
+						m.track_edits_table.valid[row][col] = valid_error
 					} else {
-						m.edit_table.valid[row][col] = inactive_style
+						m.track_edits_table.valid[row][col] = valid_inactive
 					}
 				}
 			}
@@ -322,58 +357,59 @@ func getValidModifiedEntries(m *updateEntriesModel) []Expense {
 
 		// Check if entry was modified
 		for col := 0; col < (expense_credit + 1); col++ {
-			if m.edit_table.modified[row][col] == 1 {
+			if m.track_edits_table.modified[row][col] {
 				entries = append(entries, entry)
+				valid_modified_rows = append(valid_modified_rows, row)
 				break
 			}
 		}
 
 	}
 
-	return entries
+	return entries, valid_modified_rows
 }
 
-func checkIfEntryModified(m *updateEntriesModel, row int) {
+func checkIfEntryModified(m *UpdateEntriesModel, row int) {
 
 	if strconv.Itoa(m.found_entries[row].Year) != m.entries[row].Year {
-		m.edit_table.modified[row][expense_year] = 1
+		m.track_edits_table.modified[row][expense_year] = true
 	} else {
-		m.edit_table.modified[row][expense_year] = 0
+		m.track_edits_table.modified[row][expense_year] = false
 	}
 
 	if strconv.Itoa(m.found_entries[row].Month) != m.entries[row].Month {
-		m.edit_table.modified[row][expense_month] = 1
+		m.track_edits_table.modified[row][expense_month] = true
 	} else {
-		m.edit_table.modified[row][expense_month] = 0
+		m.track_edits_table.modified[row][expense_month] = false
 	}
 
 	if strconv.Itoa(m.found_entries[row].Day) != m.entries[row].Day {
-		m.edit_table.modified[row][expense_day] = 1
+		m.track_edits_table.modified[row][expense_day] = true
 	} else {
-		m.edit_table.modified[row][expense_day] = 0
+		m.track_edits_table.modified[row][expense_day] = false
 	}
 
 	if m.found_entries[row].Description != m.entries[row].Description {
-		m.edit_table.modified[row][expense_description] = 1
+		m.track_edits_table.modified[row][expense_description] = true
 	} else {
-		m.edit_table.modified[row][expense_description] = 0
+		m.track_edits_table.modified[row][expense_description] = false
 	}
 
 	if strconv.FormatFloat(m.found_entries[row].Debit, 'f', 2, 64) != m.entries[row].Debit {
-		m.edit_table.modified[row][expense_debit] = 1
+		m.track_edits_table.modified[row][expense_debit] = true
 	} else {
-		m.edit_table.modified[row][expense_debit] = 0
+		m.track_edits_table.modified[row][expense_debit] = false
 	}
 
 	if strconv.FormatFloat(m.found_entries[row].Credit, 'f', 2, 64) != m.entries[row].Credit {
-		m.edit_table.modified[row][expense_credit] = 1
+		m.track_edits_table.modified[row][expense_credit] = true
 	} else {
-		m.edit_table.modified[row][expense_credit] = 0
+		m.track_edits_table.modified[row][expense_credit] = false
 	}
 
 }
 
-func (m updateEntriesModel) View() string {
+func (m UpdateEntriesModel) View() string {
 	s := ""
 	s = renderUpdateExpenses(m, s)
 	s += selectPromptTextStyle(m).Render(m.prompt_text) + "\n"
@@ -381,7 +417,7 @@ func (m updateEntriesModel) View() string {
 	return s
 }
 
-func renderUpdateExpenses(m updateEntriesModel, s string) string {
+func renderUpdateExpenses(m UpdateEntriesModel, s string) string {
 	sym := " "
 	if m.active_view == update_entries_view {
 		sym = "[x]"
@@ -416,20 +452,27 @@ func renderUpdateExpenses(m updateEntriesModel, s string) string {
 	s += "\n"
 
 	// slice entries
-	sliced_entries := m.entries
+	start_idx := m.found_entries_page_idx * max_entries
+	end_idx := min(start_idx+max_entries, len(m.entries))
+	sliced_entries := m.entries[start_idx:end_idx]
 
-	for row, entry := range sliced_entries {
-		line := selectUpdateEntryStyle(m, row, expense_year).Width(DateWidth).Render(entry.Year)
+	log.Printf("length of sliced entries %d", len(sliced_entries))
+
+	for y, entry := range sliced_entries {
+
+		row := start_idx + y
+
+		line := selectUpdateEntryStyle(m, y, row, expense_year).Width(DateWidth).Render(entry.Year)
 		line += " | "
-		line += selectUpdateEntryStyle(m, row, expense_month).Width(DateWidth).Render(entry.Month)
+		line += selectUpdateEntryStyle(m, y, row, expense_month).Width(DateWidth).Render(entry.Month)
 		line += " | "
-		line += selectUpdateEntryStyle(m, row, expense_day).Width(DateWidth).Render(entry.Day)
+		line += selectUpdateEntryStyle(m, y, row, expense_day).Width(DateWidth).Render(entry.Day)
 		line += " | "
-		line += selectUpdateEntryStyle(m, row, expense_description).Width(DescriptionWidth).Render(entry.Description)
+		line += selectUpdateEntryStyle(m, y, row, expense_description).Width(DescriptionWidth).Render(entry.Description)
 		line += " | "
-		line += selectUpdateEntryStyle(m, row, expense_debit).Width(DefaultWidth).Render(entry.Debit)
+		line += selectUpdateEntryStyle(m, y, row, expense_debit).Width(DefaultWidth).Render(entry.Debit)
 		line += " | "
-		line += selectUpdateEntryStyle(m, row, expense_credit).Width(DefaultWidth).Render(entry.Credit)
+		line += selectUpdateEntryStyle(m, y, row, expense_credit).Width(DefaultWidth).Render(entry.Credit)
 
 		s += line + "\n"
 	}
@@ -437,7 +480,7 @@ func renderUpdateExpenses(m updateEntriesModel, s string) string {
 	return s
 }
 
-func renderUpdateActions(m updateEntriesModel, s string) string {
+func renderUpdateActions(m UpdateEntriesModel, s string) string {
 	s += "\n" + textStyle.PaddingRight(2).Render("Edit selected entries?")
 
 	sym := ""
@@ -457,7 +500,7 @@ func activeUpdateViewStyle(active_view int, view int) lipgloss.Style {
 	return textStyle
 }
 
-func selectPromptTextStyle(m updateEntriesModel) lipgloss.Style {
+func selectPromptTextStyle(m UpdateEntriesModel) lipgloss.Style {
 	if m.prompt_text_style == 0 {
 		return textStyle
 	} else {
@@ -466,12 +509,15 @@ func selectPromptTextStyle(m updateEntriesModel) lipgloss.Style {
 }
 
 // highlights specific cell
-func selectUpdateEntryStyle(m updateEntriesModel, y int, x int) lipgloss.Style {
-	if m.edit_table.cursor.x == x && m.edit_table.cursor.y == y {
+func selectUpdateEntryStyle(m UpdateEntriesModel, y int, row int, col int) lipgloss.Style {
+
+	log.Printf("y: %d x: %d", y, col)
+
+	if m.cursor.x == col && m.cursor.y == y {
 		return selectedStyle
-	} else if m.edit_table.valid[y][x] == error_style {
+	} else if m.track_edits_table.valid[row][col] == valid_error {
 		return errorStyle
-	} else if m.edit_table.modified[y][x] == 1 {
+	} else if m.track_edits_table.modified[row][col] {
 		return questionStyle
 	}
 
