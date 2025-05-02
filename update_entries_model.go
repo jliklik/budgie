@@ -185,7 +185,8 @@ func (m UpdateEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "ctrl+c":
-			return createHomeScreenModel(), nil
+			new_m := createHomeScreenModel()
+			return new_m, new_m.Init()
 		default:
 			start_idx := m.found_entries_page_idx * max_entries
 			row := start_idx + m.cursor.y

@@ -41,6 +41,7 @@ const (
 	insertEntry   home_action = "Insert manual entry"
 	updateEntry   home_action = "Update entry"
 	deleteEntry   home_action = "Delete entries"
+	quitProgram   home_action = "Quit"
 )
 
 func GetCurrentDirectory() string {
@@ -72,7 +73,7 @@ func createHomeScreenModel() homeScreenModel {
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Key("home_action").
-				Options(huh.NewOptions(string(insertCsvData), string(insertEntry), string(updateEntry), string(deleteEntry))...).
+				Options(huh.NewOptions(string(insertCsvData), string(insertEntry), string(updateEntry), string(deleteEntry), string(quitProgram))...).
 				Title("What would you like to do?").
 				Description("Select action").
 				Value(m.home_action),
@@ -211,7 +212,8 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
-			return m, tea.Interrupt
+			new_m := createHomeScreenModel()
+			return new_m, new_m.Init()
 		case "esc", "q":
 			return m, tea.Quit
 		}
@@ -290,6 +292,9 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			found_entries := mongoFindMatchingEntries(m.entry_to_search)
 			new_m := createDeleteEntriesModel(found_entries, m.entry_to_search)
 			return new_m, new_m.Init()
+
+		case quitProgram:
+			return m, tea.Quit
 
 		}
 	}

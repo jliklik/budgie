@@ -64,7 +64,8 @@ func (m ManualInsertModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 
 		case "ctrl+c":
-			return createHomeScreenModel(), nil
+			new_m := createHomeScreenModel()
+			return new_m, new_m.Init()
 
 		case "up":
 			if m.active_view == insert_confirm_view {

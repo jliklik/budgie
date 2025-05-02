@@ -141,7 +141,8 @@ func (m DeleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "ctrl+c":
-			return createHomeScreenModel(), nil
+			new_m := createHomeScreenModel()
+			return new_m, new_m.Init()
 		default:
 			// do nothing in delete view
 		}
