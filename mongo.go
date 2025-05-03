@@ -24,6 +24,27 @@ type Expense struct {
 	Valid       bool               `bson:"valid,omitempty"`
 }
 
+// could be used for month or year
+type Totals struct {
+	TotalIncome          float64 `bson:"totalincome"`
+	TotalRentalIncome    float64 `bson:"totalrentalincome"`
+	TotalGasAndGroceries float64 `bson:"totalgasandgroceries"`
+	TotalEntertainment   float64 `bson:"totalentertainment"`
+	TotalDonation        float64 `bson:"totaldonation"`
+	TotalInsurance       float64 `bson:"totalinsurance"`
+	TotalSaved           float64 `bson:"totalsaved"`
+}
+
+type Summary struct {
+	Income          []Expense `bson:"income"`
+	RentalIncome    []Expense `bson:"rentalincome"`
+	GasAndGroceries []Expense `bson:"gasandgroceries"`
+	Entertainment   []Expense `bson:"entertainment"`
+	Donation        []Expense `bson:"donation"`
+	Insurance       []Expense `bson:"insurance"`
+	Totals          Totals    `bson:"totals"`
+}
+
 // could use reflection, but mapping struct fields to index is clearer
 const (
 	expense_year        = iota
