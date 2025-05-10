@@ -10,6 +10,11 @@ import (
 
 const FindEntryLabelWidth = 20
 
+type action struct {
+	action_text string
+	next_model  tea.Model
+}
+
 type findEntryModel struct {
 	fields          [num_expense_search_fields]string
 	validated       [num_expense_search_fields]bool

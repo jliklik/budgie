@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,15 +14,11 @@ import (
 )
 
 const (
-	delete_entries_view = iota
-	delete_action_view  = iota
-	delete_num_views    = iota
+	delete_entries_view    = iota
+	delete_select_all_view = iota
+	delete_action_view     = iota
+	delete_num_views       = iota
 )
-
-type action struct {
-	action_text string
-	next_model  tea.Model
-}
 
 type DeleteEntriesModel struct {
 	entry_to_search        Expense
@@ -104,6 +101,10 @@ func (m DeleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "tab":
 			m.active_view = (m.active_view + 1) % delete_num_views
+			if m.active_view == delete_action_view && !slices.Contains(m.selected_entries, true) {
+				log.Print("skipping delete action view")
+				m.active_view = delete_entries_view
+			}
 		case "x":
 			// toggle selected entries
 			if m.active_view == delete_entries_view {
@@ -115,10 +116,16 @@ func (m DeleteEntriesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if m.active_view == delete_entries_view {
-				if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] = true
-				} else {
-					m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] = false
+				if len(m.entries) > 0 {
+					if !m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] {
+						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] = true
+					} else {
+						m.selected_entries[m.found_entries_page_idx*num_entries_per_page+m.cursor.y] = false
+					}
+				}
+			} else if m.active_view == delete_select_all_view {
+				for i := 0; i < len(m.selected_entries); i++ {
+					m.selected_entries[i] = true
 				}
 			} else { // action view
 				selected_entries := make([]Expense, 0)
@@ -155,6 +162,7 @@ func (m DeleteEntriesModel) View() string {
 	s := ""
 	s = renderDeleteExpenses(m, s)
 	s += textStyle.Render(m.prompt_text) + "\n"
+	s = renderDeleteSelectAll(m, s)
 	s = renderDeleteActions(m, s)
 	return s
 }
@@ -239,6 +247,19 @@ func numDeleteSelectedEntries(m DeleteEntriesModel) int {
 		}
 	}
 	return num_selected
+}
+
+func renderDeleteSelectAll(m DeleteEntriesModel, s string) string {
+
+	s += "\n" + textStyle.PaddingRight(2).Render("Select all entries?")
+
+	sym := ""
+	if m.active_view == delete_select_all_view {
+		sym = "Press enter to select all entries [x]"
+	}
+	s += activeDeleteViewStyle(m.active_view, delete_select_all_view).Render(sym) + "\n"
+
+	return s
 }
 
 func renderDeleteActions(m DeleteEntriesModel, s string) string {
