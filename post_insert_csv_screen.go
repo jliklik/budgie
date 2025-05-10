@@ -3,17 +3,12 @@ package main
 import (
 	"strconv"
 
-	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type postInsertCSVScreenModel struct {
-	table    table.Model
-	expenses []Expense
-	lg       *lipgloss.Renderer
-	styles   *Styles
-	width    int
+	entries          []Expense
+	entries_page_idx int
 }
 
 const DateWidth = 5
@@ -21,67 +16,10 @@ const DefaultWidth = 15
 const DescriptionWidth = 36
 const LegendWidth = 50
 
-func createPostInsertCSVScreenModel(expenses []Expense) postInsertCSVScreenModel {
-
-	columns := []table.Column{
-		{Title: "Valid?", Width: DefaultWidth},
-		{Title: "Year", Width: DateWidth},
-		{Title: "Month", Width: DateWidth},
-		{Title: "Day", Width: DateWidth},
-		{Title: "Description", Width: DescriptionWidth},
-		{Title: "Debit", Width: DefaultWidth},
-		{Title: "Credit", Width: DefaultWidth},
+func createPostInsertCSVScreenModel(entries []Expense) postInsertCSVScreenModel {
+	return postInsertCSVScreenModel{
+		entries: entries,
 	}
-
-	// convert expense into "row"
-	rows := []table.Row{}
-
-	for _, e := range expenses {
-
-		successful := "✅"
-		if !e.Valid {
-			successful = "❌"
-		}
-
-		rows = append(rows, table.Row{
-			successful,
-			strconv.Itoa(e.Year),
-			strconv.Itoa(e.Month),
-			strconv.Itoa(e.Day),
-			e.Description,
-			strconv.FormatFloat(e.Debit, 'f', 2, 64),
-			strconv.FormatFloat(e.Credit, 'f', 2, 64)})
-	}
-
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithFocused(true),
-		table.WithHeight(7),
-	)
-
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(brown).
-		BorderBottom(true).
-		Bold(false)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(brown).
-		Bold(false)
-	t.SetStyles(s)
-
-	m := postInsertCSVScreenModel{
-		expenses: expenses,
-		table:    t,
-		width:    maxWidth,
-	}
-
-	m.lg = lipgloss.DefaultRenderer()
-	m.styles = NewStyles(m.lg)
-
-	return m
 }
 
 func (m postInsertCSVScreenModel) Init() tea.Cmd {
@@ -89,69 +27,98 @@ func (m postInsertCSVScreenModel) Init() tea.Cmd {
 }
 
 func (m postInsertCSVScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
+
 	case tea.KeyMsg:
+
 		switch msg.String() {
-		case "esc":
-			if m.table.Focused() {
-				m.table.Blur()
-			} else {
-				m.table.Focus()
+
+		case "left":
+			if m.entries_page_idx > 0 {
+				m.entries_page_idx -= 1
 			}
-		case "q", "ctrl+c":
-			new_model := createHomeScreenModel()
-			return new_model, new_model.Init()
-		case "enter":
-			return m, tea.Batch(
-				tea.Printf("Let's go to %s!", m.table.SelectedRow()[1]),
-			)
+
+		case "right":
+			if (m.entries_page_idx+1)*max_entries < len(m.entries) {
+				m.entries_page_idx += 1
+			}
+
+		case "ctrl+c":
+			return createHomeScreenModel(), nil
 		}
 	}
-	m.table, cmd = m.table.Update(msg)
-	return m, cmd
 
+	return m, nil
 }
 
 func (m postInsertCSVScreenModel) View() string {
-	s := m.styles
-	body := s.Table.Render(m.table.View())
+	s := ""
+	s += displayLegend(&m)
+	s += displayExpenses(&m)
+	s += "\n" + textStyle.PaddingLeft(2).Render("Press Ctrl+C to go back to home screen.") + "\n"
+	return s
+}
 
-	any_invalid := false
-	for _, e := range m.expenses {
-		if !e.Valid {
-			any_invalid = true
-			break
+func displayLegend(m *postInsertCSVScreenModel) string {
+	s := textStyle.Width(LegendWidth).Render("Legend") + "\n"
+	s += errorStyle.Width(LegendWidth).Render("Not inserted into DB - invalid or duplicate") + "\n"
+	s += selectedStyle.Width(LegendWidth).Render("Successfully inserted into DB") + "\n\n"
+
+	if len(m.entries) > 0 {
+		page_str := "Entries: " +
+			strconv.Itoa(m.entries_page_idx*num_entries_per_page+1) + "-" +
+			strconv.Itoa(min((m.entries_page_idx+1)*num_entries_per_page, len(m.entries))) + " / " +
+			strconv.Itoa(len(m.entries))
+
+		s += textStyle.Width(DescriptionWidth + 3).Render(page_str)
+		s += textStyle.Width((DefaultWidth + 3) * 2).Render("Press <- or -> to switch pages")
+		s += "\n"
+	}
+
+	return s
+}
+
+func displayExpenses(m *postInsertCSVScreenModel) string {
+
+	s := ""
+	s += textStyle.Width(DateWidth).Render("Year")
+	s += " | "
+	s += textStyle.Width(DateWidth).Render("Month")
+	s += " | "
+	s += textStyle.Width(DateWidth).Render("Day")
+	s += " | "
+	s += textStyle.Width(DescriptionWidth).Render("Description")
+	s += " | "
+	s += textStyle.Width(DefaultWidth).Render("Debit")
+	s += " | "
+	s += textStyle.Width(DefaultWidth).Render("Credit")
+	s += "\n"
+
+	start_idx := m.entries_page_idx * max_entries
+	end_idx := min(start_idx+max_entries, len(m.entries))
+	sliced_entries := m.entries[start_idx:end_idx]
+
+	for _, entry := range sliced_entries {
+
+		style := selectedStyle
+		if !entry.Valid {
+			style = errorStyle
 		}
+
+		line := style.Width(DateWidth).Render(strconv.Itoa(entry.Year))
+		line += " | "
+		line += style.Width(DateWidth).Render(strconv.Itoa(entry.Month))
+		line += " | "
+		line += style.Width(DateWidth).Render(strconv.Itoa(entry.Day))
+		line += " | "
+		line += style.Width(DescriptionWidth).Render(entry.Description)
+		line += " | "
+		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Debit, 'f', 2, 64))
+		line += " | "
+		line += style.Width(DefaultWidth).Render(strconv.FormatFloat(entry.Credit, 'f', 2, 64))
+		s += line + "\n"
 	}
 
-	header := m.appBoundaryView("Budgie - Budget Manager v0.0.1 🪺 ")
-
-	footer := m.appBoundaryView("Press Ctrl+C to return to home screen")
-	if any_invalid {
-		footer = m.appBoundaryView("Note: One or more entries not entered due to invalid fields.")
-	}
-
-	return s.Base.Render(header + "\n" + body + "\n\n" + footer)
-
-}
-
-func (m postInsertCSVScreenModel) appBoundaryView(text string) string {
-	return lipgloss.PlaceHorizontal(
-		m.width,
-		lipgloss.Left,
-		m.styles.HeaderText.Render(text),
-		lipgloss.WithWhitespaceChars("/"),
-		lipgloss.WithWhitespaceForeground(brown),
-	)
-}
-
-func (m postInsertCSVScreenModel) appErrorBoundaryView(text string) string {
-	return lipgloss.PlaceHorizontal(
-		m.width,
-		lipgloss.Left,
-		m.styles.ErrorHeaderText.Render(text),
-		lipgloss.WithWhitespaceChars("/"),
-		lipgloss.WithWhitespaceForeground(red),
-	)
+	return s
 }
