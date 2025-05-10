@@ -41,6 +41,7 @@ const (
 	insertEntry   home_action = "Insert manual entry"
 	updateEntry   home_action = "Update entry"
 	deleteEntry   home_action = "Delete entries"
+	processEntry  home_action = "Process entries"
 	quitProgram   home_action = "Quit"
 )
 
@@ -73,7 +74,7 @@ func createHomeScreenModel() homeScreenModel {
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Key("home_action").
-				Options(huh.NewOptions(string(insertCsvData), string(insertEntry), string(updateEntry), string(deleteEntry), string(quitProgram))...).
+				Options(huh.NewOptions(string(insertCsvData), string(insertEntry), string(updateEntry), string(deleteEntry), string(processEntry), string(quitProgram))...).
 				Title("What would you like to do?").
 				Description("Select action").
 				Value(m.home_action),
@@ -194,6 +195,49 @@ func createHomeScreenModel() homeScreenModel {
 				}
 			},
 		),
+
+		huh.NewGroup(
+			huh.NewInput().
+				Key("process_expense_year").
+				Title("Expense year").
+				Prompt("> ").
+				Value(m.search_expense_year).
+				Validate(func(str_year string) error {
+					if str_year == "" {
+						return nil
+					}
+					_, err := strconv.Atoi(str_year)
+					if err != nil {
+						return err
+					}
+					return nil
+				}),
+
+			huh.NewSelect[string]().
+				Key("process_expense_month").
+				Title("Expense month").
+				Options(huh.NewOptions("All", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")...).
+				Value(m.search_expense_month).
+				Validate(func(str_month string) error {
+					if str_month == "All" {
+						return nil
+					}
+					_, err := time.Parse("Jan", str_month)
+					if err == nil {
+						return nil
+					}
+					return err
+				}),
+		).WithHideFunc(
+			func() bool {
+				switch home_action(*m.home_action) {
+				case processEntry:
+					return false
+				default:
+					return true
+				}
+			},
+		),
 	).WithWidth(maxWidth).
 		WithShowHelp(false).
 		WithShowErrors(false).WithTheme(huh.ThemeCatppuccin())
@@ -291,6 +335,21 @@ func (m homeScreenModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			found_entries := mongoFindMatchingEntries(m.entry_to_search)
 			new_m := createDeleteEntriesModel(found_entries, m.entry_to_search)
+			return new_m, new_m.Init()
+
+		case processEntry:
+			m.entry_to_search.Year = invalid
+			if *m.search_expense_year != "" {
+				m.entry_to_search.Year, _ = strconv.Atoi(*m.search_expense_year)
+			}
+			m.entry_to_search.Month = invalid
+			if *m.search_expense_month != "All" {
+				month, _ := time.Parse("Jan", *m.search_expense_month)
+				m.entry_to_search.Month = int(month.Month())
+			}
+
+			found_entries := mongoFindMatchingEntries(m.entry_to_search)
+			new_m := createProcessEntriesModel(found_entries, m.entry_to_search)
 			return new_m, new_m.Init()
 
 		case quitProgram:
